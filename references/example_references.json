@@ -1,0 +1,1218 @@
+{
+ "regions": [
+  {
+   "id": 1,
+   "name": "Qoraqalpog'iston Respublikasi",
+   "aliases": [
+    "Qoraqalpog'iston",
+    "Karakalpakstan",
+    "Қорақалпоғистон Республикаси",
+    "Қорақалпоғистон",
+    "Каракалпакстан",
+    "Республика Каракалпакстан"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Andijon viloyati",
+   "aliases": [
+    "Andijon",
+    "Андижон вилояти",
+    "Андижон",
+    "Андижанская область",
+    "Андижан"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Buxoro viloyati",
+   "aliases": [
+    "Buxoro",
+    "Бухоро вилояти",
+    "Бухоро",
+    "Бухарская область",
+    "Бухара"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Jizzax viloyati",
+   "aliases": [
+    "Jizzax",
+    "Жиззах вилояти",
+    "Жиззах",
+    "Джизакская область",
+    "Джизак"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Qashqadaryo viloyati",
+   "aliases": [
+    "Qashqadaryo",
+    "Қашқадарё вилояти",
+    "Қашқадарё",
+    "Кашкадарьинская область",
+    "Кашкадарья"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Navoiy viloyati",
+   "aliases": [
+    "Navoiy",
+    "Навоий вилояти",
+    "Навоий",
+    "Навоийская область",
+    "Навои"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Namangan viloyati",
+   "aliases": [
+    "Namangan",
+    "Наманган вилояти",
+    "Наманган",
+    "Наманганская область"
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Samarqand viloyati",
+   "aliases": [
+    "Samarqand",
+    "Самарқанд вилояти",
+    "Самарқанд",
+    "Самаркандская область",
+    "Самарканд"
+   ]
+  },
+  {
+   "id": 9,
+   "name": "Surxondaryo viloyati",
+   "aliases": [
+    "Surxondaryo",
+    "Сурхондарё вилояти",
+    "Сурхондарё",
+    "Сурхандарьинская область",
+    "Сурхандарья"
+   ]
+  },
+  {
+   "id": 10,
+   "name": "Sirdaryo viloyati",
+   "aliases": [
+    "Sirdaryo",
+    "Сирдарё вилояти",
+    "Сирдарё",
+    "Сырдарьинская область",
+    "Сырдарья"
+   ]
+  },
+  {
+   "id": 11,
+   "name": "Toshkent viloyati",
+   "aliases": [
+    "Тошкент вилояти",
+    "Ташкентская область",
+    "Tashkent region"
+   ]
+  },
+  {
+   "id": 12,
+   "name": "Farg'ona viloyati",
+   "aliases": [
+    "Farg'ona",
+    "Фарғона вилояти",
+    "Фарғона",
+    "Ферганская область",
+    "Фергана"
+   ]
+  },
+  {
+   "id": 13,
+   "name": "Xorazm viloyati",
+   "aliases": [
+    "Xorazm",
+    "Хоразм вилояти",
+    "Хоразм",
+    "Хорезмская область",
+    "Хорезм"
+   ]
+  },
+  {
+   "id": 14,
+   "name": "Toshkent shahri",
+   "aliases": [
+    "Toshkent",
+    "Tashkent",
+    "Тошкент",
+    "Ташкент",
+    "Тошкент шаҳри",
+    "город Ташкент",
+    "Toshkent sh."
+   ]
+  }
+ ],
+ "districts": [
+  {
+   "id": 101,
+   "name": "Bektemir tumani",
+   "aliases": [
+    "Bektemir",
+    "Бектемир тумани",
+    "Бектемир",
+    "Бектемирский район"
+   ]
+  },
+  {
+   "id": 102,
+   "name": "Chilonzor tumani",
+   "aliases": [
+    "Chilonzor",
+    "Чилонзор тумани",
+    "Чилонзор",
+    "Чиланзарский район",
+    "Чиланзар"
+   ]
+  },
+  {
+   "id": 103,
+   "name": "Mirobod tumani",
+   "aliases": [
+    "Mirobod",
+    "Миробод тумани",
+    "Миробод",
+    "Мирабадский район",
+    "Мирабад"
+   ]
+  },
+  {
+   "id": 104,
+   "name": "Mirzo Ulug'bek tumani",
+   "aliases": [
+    "Mirzo Ulug'bek",
+    "Мирзо Улуғбек тумани",
+    "Мирзо Улуғбек",
+    "Мирзо-Улугбекский район",
+    "Мирзо-Улугбек"
+   ]
+  },
+  {
+   "id": 105,
+   "name": "Olmazor tumani",
+   "aliases": [
+    "Olmazor",
+    "Олмазор тумани",
+    "Олмазор",
+    "Алмазарский район",
+    "Алмазар"
+   ]
+  },
+  {
+   "id": 106,
+   "name": "Sergeli tumani",
+   "aliases": [
+    "Sergeli",
+    "Сергели тумани",
+    "Сергели",
+    "Сергелийский район"
+   ]
+  },
+  {
+   "id": 107,
+   "name": "Shayxontohur tumani",
+   "aliases": [
+    "Shayxontohur",
+    "Шайхонтоҳур тумани",
+    "Шайхонтоҳур",
+    "Шайхантахурский район",
+    "Шайхантахур"
+   ]
+  },
+  {
+   "id": 108,
+   "name": "Uchtepa tumani",
+   "aliases": [
+    "Uchtepa",
+    "Учтепа тумани",
+    "Учтепа",
+    "Учтепинский район"
+   ]
+  },
+  {
+   "id": 109,
+   "name": "Yakkasaroy tumani",
+   "aliases": [
+    "Yakkasaroy",
+    "Яккасарой тумани",
+    "Яккасарой",
+    "Яккасарайский район",
+    "Яккасарай"
+   ]
+  },
+  {
+   "id": 110,
+   "name": "Yashnobod tumani",
+   "aliases": [
+    "Yashnobod",
+    "Яшнобод тумани",
+    "Яшнобод",
+    "Яшнабадский район",
+    "Яшнабад"
+   ]
+  },
+  {
+   "id": 111,
+   "name": "Yunusobod tumani",
+   "aliases": [
+    "Yunusobod",
+    "Юнусобод тумани",
+    "Юнусобод",
+    "Юнусабадский район",
+    "Юнусабад"
+   ]
+  },
+  {
+   "id": 112,
+   "name": "Yangihayot tumani",
+   "aliases": [
+    "Yangihayot",
+    "Янгиҳаёт тумани",
+    "Янгиҳаёт",
+    "Янгихаётский район",
+    "Янгихаёт"
+   ]
+  },
+  {
+   "id": 113,
+   "name": "Zangiota tumani",
+   "aliases": [
+    "Zangiota",
+    "Зангиота тумани",
+    "Зангиота",
+    "Зангиатинский район",
+    "Зангиата"
+   ]
+  },
+  {
+   "id": 114,
+   "name": "Qibray tumani",
+   "aliases": [
+    "Qibray",
+    "Қибрай тумани",
+    "Қибрай",
+    "Кибрайский район",
+    "Кибрай"
+   ]
+  },
+  {
+   "id": 115,
+   "name": "Chirchiq shahri",
+   "aliases": [
+    "Chirchiq",
+    "Чирчиқ шаҳри",
+    "Чирчиқ",
+    "город Чирчик",
+    "Чирчик"
+   ]
+  }
+ ],
+ "sexes": [
+  {
+   "id": 1,
+   "name": "Erkak",
+   "aliases": [
+    "Erkaklar",
+    "Male",
+    "Эркак",
+    "Эркаклар",
+    "Мужской",
+    "Мужчина",
+    "Мужчины"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Ayol",
+   "aliases": [
+    "Ayollar",
+    "Female",
+    "Аёл",
+    "Аёллар",
+    "Женский",
+    "Женщина",
+    "Женщины"
+   ]
+  }
+ ],
+ "nations": [
+  {
+   "id": 1,
+   "name": "O'zbek",
+   "aliases": [
+    "Uzbek",
+    "Ўзбек",
+    "Узбек"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Rus",
+   "aliases": [
+    "Рус",
+    "Русский"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Qozoq",
+   "aliases": [
+    "Қозоқ",
+    "Казах"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Tojik",
+   "aliases": [
+    "Тожик",
+    "Таджик"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Qoraqalpoq",
+   "aliases": [
+    "Қорақалпоқ",
+    "Каракалпак"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Qirg'iz",
+   "aliases": [
+    "Қирғиз",
+    "Киргиз"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Turkman",
+   "aliases": [
+    "Туркман",
+    "Туркмен"
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Tatar",
+   "aliases": [
+    "Татар"
+   ]
+  }
+ ],
+ "languages": [
+  {
+   "id": 1,
+   "name": "O'zbek tili",
+   "aliases": [
+    "O'zbek",
+    "Ўзбек тили",
+    "Узбекский язык",
+    "Узбекский"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Rus tili",
+   "aliases": [
+    "Рус тили",
+    "Русский язык",
+    "Русский"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Ingliz tili",
+   "aliases": [
+    "Ingliz",
+    "English",
+    "Инглиз тили",
+    "Английский язык",
+    "Английский"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Nemis tili",
+   "aliases": [
+    "Nemis",
+    "German",
+    "Немис тили",
+    "Немецкий язык",
+    "Немецкий"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Fransuz tili",
+   "aliases": [
+    "Fransuz",
+    "French",
+    "Француз тили",
+    "Французский язык",
+    "Французский"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Arab tili",
+   "aliases": [
+    "Arab",
+    "Араб тили",
+    "Арабский язык",
+    "Арабский"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Turk tili",
+   "aliases": [
+    "Turk",
+    "Турк тили",
+    "Турецкий язык",
+    "Турецкий"
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Xitoy tili",
+   "aliases": [
+    "Xitoy",
+    "Chinese",
+    "Хитой тили",
+    "Китайский язык",
+    "Китайский"
+   ]
+  },
+  {
+   "id": 9,
+   "name": "Koreys tili",
+   "aliases": [
+    "Koreys",
+    "Корейс тили",
+    "Корейский язык",
+    "Корейский"
+   ]
+  }
+ ],
+ "educations": [
+  {
+   "id": 1,
+   "name": "Oliy",
+   "aliases": [
+    "Oliy ma'lumotli",
+    "Олий",
+    "Олий маълумотли",
+    "Высшее",
+    "Высшее образование"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Tugallanmagan oliy",
+   "aliases": [
+    "Тугалланмаган олий",
+    "Неоконченное высшее"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "O'rta maxsus",
+   "aliases": [
+    "O'rta-maxsus",
+    "Ўрта махсус",
+    "Среднее специальное",
+    "Среднее профессиональное"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "O'rta",
+   "aliases": [
+    "Ўрта",
+    "Среднее",
+    "Среднее общее"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Boshlang'ich",
+   "aliases": [
+    "Бошланғич",
+    "Начальное"
+   ]
+  }
+ ],
+ "specialists": [
+  {
+   "id": 1,
+   "name": "Iqtisodiyot",
+   "aliases": [
+    "iqtisodchi",
+    "Иқтисодиёт",
+    "иқтисодчи",
+    "Экономика",
+    "экономист"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Moliya",
+   "aliases": [
+    "moliyachi",
+    "Молия",
+    "Финансы",
+    "финансист"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Buxgalteriya hisobi va audit",
+   "aliases": [
+    "buxgalter",
+    "Бухгалтерия",
+    "бухгалтер",
+    "Бухгалтерский учёт и аудит"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Bank ishi",
+   "aliases": [
+    "bankir",
+    "Банк иши",
+    "Банковское дело"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Huquqshunoslik",
+   "aliases": [
+    "huquqshunos",
+    "yurist",
+    "Ҳуқуқшунослик",
+    "ҳуқуқшунос",
+    "Юриспруденция",
+    "юрист"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Axborot texnologiyalari",
+   "aliases": [
+    "IT",
+    "dasturchi",
+    "dasturlash",
+    "Ахборот технологиялари",
+    "Информационные технологии",
+    "программист"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Kompyuter injiniringi",
+   "aliases": [
+    "Компьютер инжиниринги",
+    "Компьютерный инжиниринг"
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Kiberxavfsizlik",
+   "aliases": [
+    "Киберхавфсизлик",
+    "Кибербезопасность"
+   ]
+  },
+  {
+   "id": 9,
+   "name": "Transport",
+   "aliases": [
+    "transportchi",
+    "Транспорт"
+   ]
+  },
+  {
+   "id": 10,
+   "name": "Qurilish",
+   "aliases": [
+    "quruvchi",
+    "Қурилиш",
+    "Строительство",
+    "строитель"
+   ]
+  },
+  {
+   "id": 11,
+   "name": "Arxitektura",
+   "aliases": [
+    "arxitektor",
+    "Архитектура",
+    "архитектор"
+   ]
+  },
+  {
+   "id": 12,
+   "name": "Tibbiyot",
+   "aliases": [
+    "shifokor",
+    "vrach",
+    "Тиббиёт",
+    "шифокор",
+    "Медицина",
+    "врач"
+   ]
+  },
+  {
+   "id": 13,
+   "name": "Pedagogika",
+   "aliases": [
+    "pedagog",
+    "o'qituvchi",
+    "Педагогика",
+    "ўқитувчи",
+    "учитель",
+    "педагог"
+   ]
+  },
+  {
+   "id": 14,
+   "name": "Filologiya",
+   "aliases": [
+    "filolog",
+    "Филология",
+    "филолог"
+   ]
+  },
+  {
+   "id": 15,
+   "name": "Tarix",
+   "aliases": [
+    "tarixchi",
+    "Тарих",
+    "История",
+    "историк"
+   ]
+  },
+  {
+   "id": 16,
+   "name": "Matematika",
+   "aliases": [
+    "matematik",
+    "Математика",
+    "математик"
+   ]
+  },
+  {
+   "id": 17,
+   "name": "Fizika",
+   "aliases": [
+    "fizik",
+    "Физика",
+    "физик"
+   ]
+  },
+  {
+   "id": 18,
+   "name": "Kimyo",
+   "aliases": [
+    "kimyogar",
+    "Кимё",
+    "Химия",
+    "химик"
+   ]
+  },
+  {
+   "id": 19,
+   "name": "Biologiya",
+   "aliases": [
+    "biolog",
+    "Биология",
+    "биолог"
+   ]
+  },
+  {
+   "id": 20,
+   "name": "Qishloq xo'jaligi",
+   "aliases": [
+    "agronom",
+    "Қишлоқ хўжалиги",
+    "Сельское хозяйство"
+   ]
+  },
+  {
+   "id": 21,
+   "name": "Energetika",
+   "aliases": [
+    "energetik",
+    "Энергетика",
+    "энергетик"
+   ]
+  },
+  {
+   "id": 22,
+   "name": "Neft va gaz ishi",
+   "aliases": [
+    "Нефть ва газ иши",
+    "Нефтегазовое дело"
+   ]
+  },
+  {
+   "id": 23,
+   "name": "Menejment",
+   "aliases": [
+    "Менежмент",
+    "Менеджмент"
+   ]
+  },
+  {
+   "id": 24,
+   "name": "Marketing",
+   "aliases": [
+    "marketolog",
+    "Маркетинг",
+    "маркетолог"
+   ]
+  },
+  {
+   "id": 25,
+   "name": "Xalqaro munosabatlar",
+   "aliases": [
+    "Халқаро муносабатлар",
+    "Международные отношения"
+   ]
+  },
+  {
+   "id": 26,
+   "name": "Jurnalistika",
+   "aliases": [
+    "jurnalist",
+    "Журналистика",
+    "журналист"
+   ]
+  },
+  {
+   "id": 27,
+   "name": "Psixologiya",
+   "aliases": [
+    "psixolog",
+    "Психология",
+    "психолог"
+   ]
+  },
+  {
+   "id": 28,
+   "name": "Sotsiologiya",
+   "aliases": [
+    "sotsiolog",
+    "Социология",
+    "социолог"
+   ]
+  },
+  {
+   "id": 29,
+   "name": "Statistika",
+   "aliases": [
+    "statistik",
+    "Статистика",
+    "статистик"
+   ]
+  },
+  {
+   "id": 30,
+   "name": "Davlat boshqaruvi",
+   "aliases": [
+    "Давлат бошқаруви",
+    "Государственное управление"
+   ]
+  },
+  {
+   "id": 31,
+   "name": "Ekologiya",
+   "aliases": [
+    "ekolog",
+    "Экология",
+    "эколог"
+   ]
+  },
+  {
+   "id": 32,
+   "name": "Mashinasozlik",
+   "aliases": [
+    "Машинасозлик",
+    "Машиностроение"
+   ]
+  }
+ ],
+ "eduTypes": [
+  {
+   "id": 1,
+   "name": "Kunduzgi",
+   "aliases": [
+    "Кундузги",
+    "Очная"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Sirtqi",
+   "aliases": [
+    "Сиртқи",
+    "Заочная"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Kechki",
+   "aliases": [
+    "Кечки",
+    "Вечерняя"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Masofaviy",
+   "aliases": [
+    "Масофавий",
+    "Дистанционная"
+   ]
+  }
+ ],
+ "degrees": [
+  {
+   "id": 1,
+   "name": "Bakalavr",
+   "aliases": [
+    "Бакалавр",
+    "Bachelor"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Magistr",
+   "aliases": [
+    "Магистр",
+    "Master"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Mutaxassis (5 yillik)",
+   "aliases": [
+    "Специалитет"
+   ]
+  }
+ ],
+ "academicDegrees": [
+  {
+   "id": 1,
+   "name": "Fan nomzodi",
+   "aliases": [
+    "Фан номзоди",
+    "Кандидат наук"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Fan doktori",
+   "aliases": [
+    "Фан доктори",
+    "Доктор наук"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "PhD",
+   "aliases": [
+    "Falsafa doktori",
+    "Фалсафа доктори",
+    "Доктор философии"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "DSc",
+   "aliases": [
+    "Fan doktori (DSc)",
+    "Доктор наук (DSc)"
+   ]
+  }
+ ],
+ "academicTitles": [
+  {
+   "id": 1,
+   "name": "Dotsent",
+   "aliases": [
+    "Доцент"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Professor",
+   "aliases": [
+    "Профессор"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Katta ilmiy xodim",
+   "aliases": [
+    "Катта илмий ходим",
+    "Старший научный сотрудник"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Akademik",
+   "aliases": [
+    "Академик"
+   ]
+  }
+ ],
+ "institutions": [
+  {
+   "id": 1,
+   "name": "Iqtisodiyot va moliya vazirligi",
+   "aliases": [
+    "Иқтисодиёт ва молия вазирлиги",
+    "Министерство экономики и финансов"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Adliya vazirligi",
+   "aliases": [
+    "Адлия вазирлиги",
+    "Министерство юстиции"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Raqamli texnologiyalar vazirligi",
+   "aliases": [
+    "Рақамли технологиялар вазирлиги",
+    "Министерство цифровых технологий"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Sog'liqni saqlash vazirligi",
+   "aliases": [
+    "Соғлиқни сақлаш вазирлиги",
+    "Министерство здравоохранения"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Toshkent shahar hokimligi",
+   "aliases": [
+    "Тошкент шаҳар ҳокимлиги",
+    "Хокимият города Ташкента"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Transport vazirligi",
+   "aliases": [
+    "Транспорт вазирлиги",
+    "Министерство транспорта"
+   ]
+  }
+ ],
+ "institutionTypes": [
+  {
+   "id": 1,
+   "name": "Vazirlik",
+   "aliases": [
+    "Вазирлик",
+    "Министерство"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Qo'mita",
+   "aliases": [
+    "Қўмита",
+    "Комитет"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Agentlik",
+   "aliases": [
+    "Агентлик",
+    "Агентство"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Hokimlik",
+   "aliases": [
+    "Ҳокимлик",
+    "Хокимият"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Davlat korxonasi",
+   "aliases": [
+    "Давлат корхонаси",
+    "Государственное предприятие"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Oliy ta'lim muassasasi",
+   "aliases": [
+    "OTM",
+    "Олий таълим муассасаси",
+    "ВУЗ",
+    "Высшее учебное заведение"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Bank",
+   "aliases": [
+    "Банк"
+   ]
+  }
+ ],
+ "institutionGroups": [
+  {
+   "id": 1,
+   "name": "Respublika darajasidagi tashkilotlar",
+   "aliases": [
+    "Республиканские организации"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Hududiy tashkilotlar",
+   "aliases": [
+    "Территориальные организации"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Xo'jalik birlashmalari",
+   "aliases": [
+    "Хозяйственные объединения"
+   ]
+  }
+ ],
+ "positionCategories": [
+  {
+   "id": 1,
+   "name": "I toifa",
+   "aliases": [
+    "1-toifa",
+    "Биринчи тоифа",
+    "Первая категория"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "II toifa",
+   "aliases": [
+    "2-toifa",
+    "Иккинчи тоифа",
+    "Вторая категория"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "III toifa",
+   "aliases": [
+    "3-toifa",
+    "Учинчи тоифа",
+    "Третья категория"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Oliy toifa",
+   "aliases": [
+    "Олий тоифа",
+    "Высшая категория"
+   ]
+  }
+ ],
+ "languageCertificates": [
+  {
+   "id": 1,
+   "name": "IELTS",
+   "aliases": [
+    "Айелтс"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "TOEFL",
+   "aliases": [
+    "Тоефл"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "CEFR B1",
+   "aliases": [
+    "B1"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "CEFR B2",
+   "aliases": [
+    "B2"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "CEFR C1",
+   "aliases": [
+    "C1"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "CEFR C2",
+   "aliases": [
+    "C2"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "TestDaF",
+   "aliases": []
+  },
+  {
+   "id": 8,
+   "name": "DELF",
+   "aliases": []
+  },
+  {
+   "id": 9,
+   "name": "HSK",
+   "aliases": []
+  },
+  {
+   "id": 10,
+   "name": "TOPIK",
+   "aliases": []
+  }
+ ]
+}
