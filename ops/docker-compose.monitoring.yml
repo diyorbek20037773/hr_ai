@@ -1,0 +1,16 @@
+# Optional monitoring stack (not required to run hr_ai). Start with:
+#   docker compose -f ops/docker-compose.monitoring.yml up -d
+# Note: the API binds 127.0.0.1 by default; set APP_HOST=0.0.0.0 in .env if containers cannot reach it.
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3001:3000"]
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    depends_on: [prometheus]

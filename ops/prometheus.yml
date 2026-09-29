@@ -1,0 +1,8 @@
+# Optional: Prometheus scraping the hr_ai API running on the Windows host.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: hr_ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8001"]
