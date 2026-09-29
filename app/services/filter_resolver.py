@@ -12,7 +12,7 @@ from typing import Any
 from app.core.config import Settings, get_settings
 from app.core.metrics import FUZZY_SCORE, RESOLVER_FIELDS
 from app.models.ai_intent import ParsedSearchIntent
-from app.models.enums import parse_type_of_position, parse_type_of_service
+from app.models.enums import TypeOfPosition, parse_type_of_position, parse_type_of_service
 from app.models.labels import BOOL_LABELS, ENUM_LABELS, label_for
 from app.models.references import DICTIONARY_FIELDS, ReferenceData
 from app.models.responses import RecognizedFilter, ResolveResult, UnresolvedFilter
@@ -124,7 +124,10 @@ class FilterResolver:
         if "typeOfPosition" in data:
             members = []
             for inp in data["typeOfPosition"]:
-                member, how = parse_type_of_position(inp)
+                member, _ = parse_type_of_position(inp)
+                if member == TypeOfPosition.All:
+                    warnings.append("'Barchasi' lavozim turi filtr emas — e'tiborga olinmadi.")
+                    continue
                 if member is None:
                     bad("typeOfPosition", inp, "no_match",
                         message=f"Lavozim turi aniqlanmadi: '{inp}'.")
@@ -134,7 +137,7 @@ class FilterResolver:
             if members:
                 values["type_of_position"] = members
         if "typeOfService" in data:
-            member, how = parse_type_of_service(data["typeOfService"])
+            member, _ = parse_type_of_service(data["typeOfService"])
             if member is None:
                 bad("typeOfService", data["typeOfService"], "no_match",
                     message=f"Xizmat turi aniqlanmadi: '{data['typeOfService']}'.")
@@ -171,7 +174,12 @@ class FilterResolver:
             lo_v, hi_v = values.get(_DIRECT_INT[lo_key][0]), values.get(_DIRECT_INT[hi_key][0])
             if lo_v is not None and hi_v is not None and lo_v > hi_v:
                 validation_errors += 1
-                warnings.append(f"{what} oralig'i noto'g'ri: {lo_v} > {hi_v}.")
+                msg = f"{what} oralig'i noto'g'ri: {lo_v} > {hi_v}."
+                for key in (lo_key, hi_key):
+                    attr, field = _DIRECT_INT[key][0], _DIRECT_INT[key][1]
+                    values.pop(attr, None)
+                    recognized[:] = [r for r in recognized if r.field != field]
+                    bad(field, data[key], "validation", message=msg if key == lo_key else None)
 
         for key, (attr, field, length) in _DIGIT_IDS.items():
             if key not in data:

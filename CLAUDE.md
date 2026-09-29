@@ -169,6 +169,9 @@ or the dev's tests.
 | `rows` default 20, `first` default 0 | `DEFAULT_SEARCH_ROWS` | config |
 | HR Search API URL / path / auth are unknown | `HR_SEARCH_API_URL`, `HR_SEARCH_API_PATH`, `HR_SEARCH_API_KEY` | `.env` only |
 | When `HR_SEARCH_API_URL` is empty, `/search` returns `searchModel` with `executed: false` | `search_client.py` | none |
+| `dateOfReceipt` is sent as `YYYY-MM-DD` (date only) | `app/models/search.py` | send datetime if the API needs it |
+| `/search` refuses IDs from the local placeholder JSON | `ALLOW_LOCAL_REFERENCES_FOR_SEARCH` | config |
+| 6 GB dev GPU → 4-bit bitsandbytes model (`MODEL_QUANTIZATION=auto`) | `llm_service.py`, `docs/architecture.md` #6 | config |
 | Reference collections keys: `regions, districts, sexes, nations, languages, educations, specialists, eduTypes, degrees, academicDegrees, academicTitles, institutions, institutionTypes, institutionGroups, positionCategories, languageCertificates` | `app/models/references.py` | one mapping table |
 
 ## 10. Documentation that must stay in sync

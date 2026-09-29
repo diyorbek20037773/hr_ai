@@ -9,7 +9,7 @@ from fastapi import Depends, Header, Request
 from app.core.config import Settings, get_settings
 
 
-def get_app_settings(request: Request) -> Settings:
+async def get_app_settings(request: Request) -> Settings:
     """Settings the running app was created with (falls back to the global .env settings)."""
     return getattr(request.app.state, "settings", None) or get_settings()
 

@@ -22,6 +22,7 @@ Every response carries `X-Request-ID` (echoed if the client sent one, generated 
 | 422 | `LLM_OUTPUT_INVALID` | model output not valid JSON after one corrective retry |
 | 502 | `HR_SEARCH_FAILED` | HR Search API error / unreachable |
 | 503 | `MODEL_NOT_READY` | model still loading or failed to load |
+| 503 | `LLM_BUSY` | more than `LLM_MAX_QUEUE` (8) requests already waiting for the model |
 | 504 | `LLM_TIMEOUT` | generation exceeded `LLM_TIMEOUT_SECONDS` |
 | 500 | `INTERNAL_ERROR` | unexpected error (logged with request id) |
 
@@ -31,7 +32,7 @@ Liveness — always 200 while the process runs.
 
 ```json
 { "status": "ok", "modelLoaded": true, "modelStatus": "loaded", "modelPath": "D:\\myprojects\\hr_ai\\model",
-  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "1", "uptimeSeconds": 431.2 }
+  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "3", "uptimeSeconds": 431.2 }
 ```
 
 `modelStatus`: `loading | loaded | failed | not_loaded`.
@@ -53,7 +54,7 @@ Response:
 ```json
 { "query": "Oliy ma'lumotli, 30 yoshdan katta ayollar",
   "intent": { "education": "Oliy", "fromAge": 30, "sex": "Ayol" },
-  "promptVersion": "1", "latencyMs": 5210 }
+  "promptVersion": "3", "latencyMs": 5210 }
 ```
 
 `intent` keys (text values only, only those the user mentioned): `region, birthRegion, district, sex, nation,
@@ -81,8 +82,9 @@ Response:
 {
   "query": "…",
   "intent": { "district": "Chilonzor", "language": "Ingliz tili", "languageCertificate": "IELTS", "toAge": 35 },
-  "promptVersion": "1",
+  "promptVersion": "3",
   "latencyMs": 5873,
+  "referenceSources": { "districts": "request", "languages": "local", "languageCertificates": "local" },
   "searchModel": { "districtId": 102, "languageId": 3, "toAge": 35, "academicTitleId": 0,
                    "languageCertificateId": 1, "first": 0, "rows": 20 },
   "recognizedFilters": [
@@ -101,7 +103,10 @@ Response:
   one chip per item with `value: [id]`.
 - `unresolvedFilters[]`: `{field, label, labelRu, inputValue, reason, candidates: [{id, name, score}], message}`;
   `reason`: `no_match | ambiguous | low_confidence | validation | no_reference_data`. Unresolved values are **not**
-  put into `searchModel`.
+  put into `searchModel`. For an inverted range (`fromAge > toAge`, `fromYear > toYear`) both values are removed
+  and reported with `reason: "validation"`.
+- `referenceSources` tells, per collection the intent needed, where the IDs came from: `request`, `remote` or
+  `local` (placeholder dev data).
 - `readyToSearch` is true only with zero unresolved filters and zero validation errors. An empty intent gives an
   empty filter set, `readyToSearch: true` and the warning "no filters recognized".
 - `searchModel` always contains `academicTitleId` (`ACADEMIC_TITLE_ID_DEFAULT`, 0, unless requested), `first`, `rows`.
@@ -116,6 +121,8 @@ Same request as `/resolve`. Response = `/resolve` fields plus:
 |---|---|---|---|
 | `HR_SEARCH_API_URL` empty | `false` | `HR_SEARCH_API_NOT_CONFIGURED` | `null` |
 | `readyToSearch` false | `false` | `NOT_READY_TO_SEARCH` | `null` |
+| no filter recognized (empty intent) | `false` | `NO_FILTERS` | `null` |
+| a needed collection came from the local placeholder JSON (and `ALLOW_LOCAL_REFERENCES_FOR_SEARCH=false`) | `false` | `LOCAL_REFERENCES_NOT_ALLOWED` | `null` |
 | searched | `true` | `null` | `{ "items": SearchResultDTO[], "totalItems": n }` (passed through untouched) |
 
 The HR API call is `POST {HR_SEARCH_API_URL}{HR_SEARCH_API_PATH}` with the `searchModel` JSON as body,

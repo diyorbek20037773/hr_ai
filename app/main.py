@@ -27,12 +27,10 @@ from app.services.reference_provider import ReferenceService
 from app.services.search_client import HrSearchClient
 
 log = get_logger("app")
-MAX_BODY_BYTES = 5 * 1024 * 1024
 
 
 def _load_model_in_background(app: FastAPI, llm: QwenLLMService) -> None:
     """Load once, off the event loop, so /health answers while the weights load; /ready turns 200 after."""
-    app.state.model_status = "loading"
     try:
         llm.load()
         app.state.model_status = "loaded"
@@ -55,6 +53,7 @@ def create_app(settings: Settings | None = None, llm: BaseLLMService | None = No
         if llm is None:
             qwen = QwenLLMService(settings)
             app.state.llm = qwen
+            app.state.model_status = "loading"
             loader = threading.Thread(target=_load_model_in_background, args=(app, qwen), name="model-loader",
                                       daemon=True)
             loader.start()
@@ -101,10 +100,15 @@ def create_app(settings: Settings | None = None, llm: BaseLLMService | None = No
         status = 500
         try:
             length = request.headers.get("content-length")
-            if length and length.isdigit() and int(length) > MAX_BODY_BYTES:
+            if length and length.isdigit() and int(length) > settings.MAX_BODY_BYTES:
                 response = _error(413, "PAYLOAD_TOO_LARGE", "request body too large", rid)
             else:
-                response = await call_next(request)
+                try:
+                    response = await call_next(request)
+                except Exception as exc:  # noqa: BLE001 — build the 500 envelope here, while the request id is set
+                    log.error("unhandled_error", extra={"errorType": type(exc).__name__})
+                    log.debug("unhandled_error_traceback", exc_info=exc)
+                    response = _error(500, "INTERNAL_ERROR", "Internal server error", rid)
             status = response.status_code
             response.headers["X-Request-ID"] = rid
             return response
@@ -132,11 +136,6 @@ def create_app(settings: Settings | None = None, llm: BaseLLMService | None = No
     async def http_handler(request: Request, exc: StarletteHTTPException):
         code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "HTTP_ERROR")
         return _error(exc.status_code, code, str(exc.detail), request_id_var.get())
-
-    @app.exception_handler(Exception)
-    async def unhandled_handler(request: Request, exc: Exception):
-        log.error("unhandled_error", exc_info=exc)
-        return _error(500, "INTERNAL_ERROR", "Internal server error", request_id_var.get())
 
     app.include_router(health.router)
     app.include_router(ai_search.router)

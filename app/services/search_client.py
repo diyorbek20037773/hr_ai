@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.core.metrics import HR_SEARCH_REQUESTS
+from app.models.responses import SearchResults
 
 log = get_logger(__name__)
 
@@ -42,8 +44,8 @@ class HrSearchClient:
             headers["Authorization"] = key if key.lower().startswith(("bearer ", "basic ")) else f"Bearer {key}"
         return headers
 
-    async def search(self, search_model: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
-        """POST the ISearchModel JSON; returns {"items": [...], "totalItems": n} untouched."""
+    async def search(self, search_model: dict[str, Any], request_id: str | None = None) -> SearchResults:
+        """POST the ISearchModel JSON; returns items / totalItems untouched."""
         if not self.configured:
             raise HrSearchError(NOT_CONFIGURED)
         headers = self._headers()
@@ -69,7 +71,10 @@ class HrSearchClient:
         except ValueError as exc:
             raise HrSearchError("HR Search API returned non-JSON") from exc
         if isinstance(body, list):  # tolerate a bare list
-            return {"items": body, "totalItems": len(body)}
+            body = {"items": body, "totalItems": len(body)}
         if not isinstance(body, dict):
             raise HrSearchError("HR Search API returned an unexpected payload")
-        return {"items": body.get("items"), "totalItems": body.get("totalItems", 0)}
+        try:
+            return SearchResults(items=body.get("items"), totalItems=body.get("totalItems") or 0)
+        except ValidationError as exc:
+            raise HrSearchError("HR Search API returned a malformed result set") from exc

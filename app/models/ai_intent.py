@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 _TRUE = {"true", "1", "yes", "ha", "bor", "да", "ҳа", "есть", "y"}
 _FALSE = {"false", "0", "no", "yo'q", "yoq", "нет", "йўқ", "n"}
-_INT_RE = re.compile(r"-?\d+")
+_INT_RE = re.compile(r"^\s*-?\d+\s*$")
 
 # Tolerated alternative keys the model may produce -> canonical key.
 _KEY_SYNONYMS = {
@@ -120,10 +120,9 @@ class ParsedSearchIntent(BaseModel):
         if isinstance(v, float) and v.is_integer():
             return int(v)
         if isinstance(v, str):
-            m = _INT_RE.search(v)
-            if not m:
-                raise ValueError(f"not a number: {v!r}")
-            return int(m.group())
+            if not _INT_RE.match(v):  # "30-40", "5+" etc. are rejected, never partially parsed
+                raise ValueError(f"not a single integer: {v!r}")
+            return int(v)
         return v
 
     @field_validator(*BOOL_FIELDS, mode="before")

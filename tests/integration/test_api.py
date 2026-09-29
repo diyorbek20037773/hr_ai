@@ -149,13 +149,18 @@ def _mock_hr(app, settings, captured, results=HR_RESULTS, status=200):
     app.state.hr_client = HrSearchClient(settings, transport=httpx.MockTransport(handler))
 
 
-def test_search_with_mocked_hr_api(make_app, settings_factory, ref_id):
+def _q1_request_refs(raw_references):
+    """Q1's collections supplied by the caller, so their source is "request" (not local placeholder data)."""
+    return {k: raw_references[k] for k in ("educations", "sexes")}
+
+
+def test_search_with_mocked_hr_api(make_app, settings_factory, ref_id, raw_references):
     hr_settings = settings_factory(HR_SEARCH_API_URL="http://hr.test", HR_SEARCH_API_PATH="/api/search")
     app, _ = make_app(RESPONSES, HR_SEARCH_API_URL="http://hr.test", HR_SEARCH_API_PATH="/api/search")
     captured: list[dict] = []
     with TestClient(app) as c:
         _mock_hr(app, hr_settings, captured)
-        r = c.post(f"{P}/search", json={"query": Q1})
+        r = c.post(f"{P}/search", json={"query": Q1, "referenceData": _q1_request_refs(raw_references)})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["executed"] is True
@@ -165,6 +170,22 @@ def test_search_with_mocked_hr_api(make_app, settings_factory, ref_id):
     assert captured[0]["url"] == "http://hr.test/api/search"
     assert captured[0]["body"] == body["searchModel"]
     assert body["searchModel"] == _expected_q1(ref_id)
+    assert body["referenceSources"] == {"educations": "request", "sexes": "request"}
+
+
+def test_search_with_local_references_allowed_by_setting(make_app, settings_factory, ref_id):
+    hr_settings = settings_factory(HR_SEARCH_API_URL="http://hr.test", ALLOW_LOCAL_REFERENCES_FOR_SEARCH=True)
+    app, _ = make_app(RESPONSES, HR_SEARCH_API_URL="http://hr.test", ALLOW_LOCAL_REFERENCES_FOR_SEARCH=True)
+    captured: list[dict] = []
+    with TestClient(app) as c:
+        _mock_hr(app, hr_settings, captured)
+        r = c.post(f"{P}/search", json={"query": Q1})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["executed"] is True
+    assert len(captured) == 1
+    assert body["searchModel"] == _expected_q1(ref_id)
+    assert set(body["referenceSources"].values()) == {"local"}
 
 
 def test_search_not_ready_does_not_call_hr(make_app, settings_factory):
@@ -180,16 +201,17 @@ def test_search_not_ready_does_not_call_hr(make_app, settings_factory):
     assert captured == []
 
 
-def test_search_hr_api_error_is_envelope(make_app, settings_factory):
+def test_search_hr_api_error_is_envelope(make_app, settings_factory, raw_references):
     hr_settings = settings_factory(HR_SEARCH_API_URL="http://hr.test")
     app, _ = make_app(RESPONSES, HR_SEARCH_API_URL="http://hr.test")
     captured: list[dict] = []
     with TestClient(app) as c:
         _mock_hr(app, hr_settings, captured,
                  results={"error": "boom"}, status=500)
-        r = c.post(f"{P}/search", json={"query": Q1})
+        r = c.post(f"{P}/search", json={"query": Q1, "referenceData": _q1_request_refs(raw_references)})
+    assert len(captured) == 1
     assert r.status_code >= 500
-    _assert_envelope(r)
+    _assert_envelope(r, code="HR_SEARCH_FAILED")
 
 
 # ---------------------------------------------------------------- references

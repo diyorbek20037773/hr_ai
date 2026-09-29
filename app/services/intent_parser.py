@@ -66,6 +66,9 @@ class IntentParser:
         except LLMTimeoutError:
             LLM_REQUESTS.labels(status="timeout").inc()
             raise
+        except Exception:
+            LLM_REQUESTS.labels(status="error").inc()
+            raise
         try:
             intent = _validate(raw2)
             LLM_REQUESTS.labels(status="ok").inc()

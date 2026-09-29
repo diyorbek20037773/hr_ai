@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 HTTP_REQUESTS = Counter("hr_ai_http_requests_total", "HTTP requests", ["method", "path", "status"])
@@ -30,9 +32,10 @@ for _result in ("resolved", "unresolved", "candidate"):
 
 
 def update_gpu_memory() -> None:
+    torch = sys.modules.get("torch")  # never import on the event loop (the loader thread may hold the lock)
+    if torch is None:
+        return
     try:
-        import torch
-
         if torch.cuda.is_available():
             GPU_MEMORY_USED.set(torch.cuda.memory_allocated())
     except Exception:  # noqa: BLE001 — metrics must never break a request

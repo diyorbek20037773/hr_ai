@@ -12,7 +12,7 @@ from app.services.reference_provider import ReferenceService
 from app.services.search_client import HrSearchClient
 
 
-def get_llm(request: Request) -> BaseLLMService:
+async def get_llm(request: Request) -> BaseLLMService:
     llm = getattr(request.app.state, "llm", None)
     if llm is None or not llm.is_loaded:
         status = getattr(request.app.state, "model_status", "loading")
@@ -20,17 +20,17 @@ def get_llm(request: Request) -> BaseLLMService:
     return llm
 
 
-def get_intent_parser(request: Request) -> IntentParser:
-    return IntentParser(get_llm(request))
+async def get_intent_parser(request: Request) -> IntentParser:
+    return IntentParser(await get_llm(request))
 
 
-def get_reference_service(request: Request) -> ReferenceService:
+async def get_reference_service(request: Request) -> ReferenceService:
     return request.app.state.references
 
 
-def get_resolver(request: Request) -> FilterResolver:
+async def get_resolver(request: Request) -> FilterResolver:
     return request.app.state.resolver
 
 
-def get_hr_client(request: Request) -> HrSearchClient:
+async def get_hr_client(request: Request) -> HrSearchClient:
     return request.app.state.hr_client

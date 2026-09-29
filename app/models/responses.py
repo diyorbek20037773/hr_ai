@@ -73,6 +73,7 @@ class ParseResponse(BaseModel):
 
 class ResolveResponse(ResolveResult):
     query: str
+    referenceSources: dict[str, str] = Field(default_factory=dict)  # collection -> request | remote | local
     intent: dict[str, Any]
     promptVersion: str
     latencyMs: int

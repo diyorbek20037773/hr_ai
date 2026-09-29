@@ -58,9 +58,13 @@ class LocalJsonReferenceProvider:
             log.warning("local_references_missing", extra={"path": str(self.path)})
             return {}
         if self._cache is None or mtime != self._mtime:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-            self._cache = {k: [ReferenceItem.model_validate(i) for i in v] for k, v in raw.items()
-                           if k in COLLECTION_KEYS and isinstance(v, list)}
+            try:
+                raw = json.loads(self.path.read_text(encoding="utf-8"))
+                self._cache = {k: [ReferenceItem.model_validate(i) for i in v] for k, v in raw.items()
+                               if k in COLLECTION_KEYS and isinstance(v, list)}
+            except (ValueError, ValidationError, AttributeError) as exc:
+                log.error("local_references_invalid", extra={"path": str(self.path), "error": type(exc).__name__})
+                self._cache = {}
             self._mtime = mtime
         return self._cache
 
@@ -151,23 +155,21 @@ class CompositeReferenceProvider:
                 return items
         return None
 
-    async def load(self, collections: Iterable[str]) -> ReferenceData:
-        out: ReferenceData = {}
+    async def load_with_sources(self, collections: Iterable[str]) -> tuple[ReferenceData, dict[str, str]]:
+        """Items per collection plus which provider ("request" | "remote" | "local") served each one."""
+        data: ReferenceData = {}
+        sources: dict[str, str] = {}
         for c in dict.fromkeys(collections):
-            items = await self.get(c)
-            if items:
-                out[c] = items
-        return out
-
-    async def sources(self, collections: Iterable[str]) -> dict[str, str]:
-        """Which provider serves each collection (for /references)."""
-        out: dict[str, str] = {}
-        for c in collections:
             for p in self.providers:
-                if await p.get(c):
-                    out[c] = p.name
+                items = await p.get(c)
+                if items:
+                    data[c] = items
+                    sources[c] = p.name
                     break
-        return out
+        return data, sources
+
+    async def load(self, collections: Iterable[str]) -> ReferenceData:
+        return (await self.load_with_sources(collections))[0]
 
 
 class ReferenceService:

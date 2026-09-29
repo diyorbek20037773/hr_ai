@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     MODEL_MAX_NEW_TOKENS: int = 512
     MODEL_REPETITION_PENALTY: float = 1.05
     LLM_TIMEOUT_SECONDS: float = 60.0
+    LLM_MAX_QUEUE: int = 8  # requests waiting for / holding the model; more -> 503 LLM_BUSY
 
     # --- search model defaults ---
     DEFAULT_SEARCH_ROWS: int = 20
@@ -66,12 +67,15 @@ class Settings(BaseSettings):
     # optional JSON object collection -> path, e.g. {"regions": "/dict/regions"}; default "/<collection>"
     REFERENCE_API_PATHS: dict[str, str] = {}
     LOCAL_REFERENCES_PATH: str = "references/example_references.json"
+    # local JSON has placeholder IDs: /search refuses to send them to the HR API unless explicitly allowed
+    ALLOW_LOCAL_REFERENCES_FOR_SEARCH: bool = False
 
     # --- security / limits ---
     AI_SEARCH_API_KEY: str = ""
     CORS_ALLOWED_ORIGINS: str = "http://localhost:4200,http://localhost:3000"
     MAX_QUERY_LENGTH: int = 1000
     MAX_REFERENCE_ITEMS: int = 20000
+    MAX_BODY_BYTES: int = 5 * 1024 * 1024
 
     @field_validator("MODEL_GPU_MAX_MEMORY_GB", mode="before")
     @classmethod

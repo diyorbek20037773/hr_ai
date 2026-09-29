@@ -111,7 +111,7 @@ def setup_logging(level: str = "INFO", log_dir: str | Path = "logs", to_file: bo
         lg.handlers.clear()
         lg.propagate = True
     logging.getLogger("uvicorn.access").disabled = True
-    for noisy in ("httpx", "httpcore", "urllib3", "filelock"):
+    for noisy in ("httpx", "httpcore", "httpx2", "httpcore2", "urllib3", "filelock"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     _configured = True
 

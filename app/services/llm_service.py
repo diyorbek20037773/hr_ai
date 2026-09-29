@@ -29,6 +29,10 @@ class LLMTimeoutError(TimeoutError):
     pass
 
 
+class LLMBusyError(RuntimeError):
+    """Queue limit (LLM_MAX_QUEUE) reached - reject instead of piling up waiting threads."""
+
+
 @runtime_checkable
 class BaseLLMService(Protocol):
     @property
@@ -181,8 +185,7 @@ class QwenLLMService:
         self._tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
         log.info("Loading model…")
         kwargs: dict = {"local_files_only": True, "low_cpu_mem_usage": True}
-        major = int(transformers.__version__.split(".")[0])
-        kwargs["dtype" if major >= 5 or _accepts_dtype_kw(transformers) else "torch_dtype"] = dtype
+        kwargs["dtype" if _accepts_dtype_kw(transformers) else "torch_dtype"] = dtype
         if quant in ("4bit", "8bit"):
             from transformers import BitsAndBytesConfig
 
@@ -234,6 +237,8 @@ class QwenLLMService:
         import torch
 
         with self._waiting_lock:
+            if self._waiting >= self.settings.LLM_MAX_QUEUE:
+                raise LLMBusyError(f"{self._waiting} requests already queued")
             self._waiting += 1
             LLM_QUEUE_DEPTH.set(self._waiting)
         try:
@@ -253,11 +258,13 @@ class QwenLLMService:
                     pad_token_id=eos,
                     stopping_criteria=_deadline_criteria(deadline),
                 )
-                with torch.inference_mode():
-                    out = self._model.generate(**inputs, **gen_kwargs)
+                try:
+                    with torch.inference_mode():
+                        out = self._model.generate(**inputs, **gen_kwargs)
+                finally:
+                    LLM_DURATION.observe(time.perf_counter() - t0)
                 new_tokens = out[0][inputs["input_ids"].shape[1]:]
                 result = self._tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-                LLM_DURATION.observe(time.perf_counter() - t0)
                 if time.monotonic() > deadline:
                     raise LLMTimeoutError(f"generation exceeded {self.settings.LLM_TIMEOUT_SECONDS}s")
                 return result

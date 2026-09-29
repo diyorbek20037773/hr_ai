@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_hr_client, get_intent_parser, get_reference_service, get_resolver
@@ -18,11 +18,10 @@ from app.models.responses import (
     ResolveRequest,
     ResolveResponse,
     SearchResponse,
-    SearchResults,
 )
 from app.services.filter_resolver import FilterResolver
 from app.services.intent_parser import IntentParseError, IntentParser, ParseOutcome
-from app.services.llm_service import LLMTimeoutError
+from app.services.llm_service import LLMBusyError, LLMTimeoutError
 from app.services.reference_provider import ReferenceService
 from app.services.search_client import NOT_CONFIGURED, HrSearchClient, HrSearchError
 
@@ -46,6 +45,8 @@ async def _parse(parser: IntentParser, query: str) -> ParseOutcome:
         raise ApiError(422, exc.code, "The model did not return a valid search intent; rephrase the query") from exc
     except LLMTimeoutError as exc:
         raise ApiError(504, "LLM_TIMEOUT", "The local model did not answer in time") from exc
+    except LLMBusyError as exc:
+        raise ApiError(503, "LLM_BUSY", "Too many AI search requests are waiting; retry shortly") from exc
 
 
 async def _resolve(body: ResolveRequest, parser: IntentParser, refs: ReferenceService,
@@ -62,13 +63,14 @@ async def _resolve(body: ResolveRequest, parser: IntentParser, refs: ReferenceSe
                            f"referenceData has {total} items; limit is {settings.MAX_REFERENCE_ITEMS}")
     outcome = await _parse(parser, query)
     provider = refs.for_request(body.referenceData)
-    references = await provider.load(resolver.required_collections(outcome.intent))
-    result = resolver.resolve(outcome.intent, references, first=body.first, rows=body.rows)
+    references, sources = await provider.load_with_sources(resolver.required_collections(outcome.intent))
+    # fuzzy matching over large collections is CPU work - keep it off the event loop
+    result = await run_in_threadpool(resolver.resolve, outcome.intent, references, body.first, body.rows)
     latency = int((time.perf_counter() - t0) * 1000)
     log.info("resolve_done", extra={**query_fingerprint(query), "durationMs": latency,
                                     "recognized": len(result.recognizedFilters),
                                     "unresolved": len(result.unresolvedFilters), "ready": result.readyToSearch})
-    return ResolveResponse(query=query, intent=outcome.intent.to_compact_dict(),
+    return ResolveResponse(query=query, intent=outcome.intent.to_compact_dict(), referenceSources=sources,
                            promptVersion=outcome.prompt_version, latencyMs=latency, **result.model_dump())
 
 
@@ -105,26 +107,28 @@ async def search(body: ResolveRequest, parser: IntentParser = Depends(get_intent
         return SearchResponse(**base, executed=False, reason=NOT_CONFIGURED)
     if not resolved.readyToSearch:
         return SearchResponse(**base, executed=False, reason="NOT_READY_TO_SEARCH")
+    if not resolved.recognizedFilters:
+        # an empty intent would run an unfiltered personnel query nobody asked for
+        return SearchResponse(**base, executed=False, reason="NO_FILTERS")
+    placeholder = sorted(c for c, src in resolved.referenceSources.items() if src == "local")
+    if placeholder and not settings.ALLOW_LOCAL_REFERENCES_FOR_SEARCH:
+        # local JSON holds placeholder IDs - never send them to the real HR API
+        log.warning("search_blocked_local_references", extra={"collections": placeholder})
+        return SearchResponse(**base, executed=False, reason="LOCAL_REFERENCES_NOT_ALLOWED")
     try:
         results = await hr.search(resolved.searchModel, request_id=request_id_var.get())
     except HrSearchError as exc:
         raise ApiError(502, "HR_SEARCH_FAILED", str(exc)) from exc
-    return SearchResponse(**base, executed=True, results=SearchResults(**results))
+    return SearchResponse(**base, executed=True, results=results)
 
 
 @router.get("/references", summary="Reference collections available to the resolver")
-async def references(request: Request, collection: str | None = Query(default=None),
+async def references(collection: str | None = Query(default=None),
                      refs: ReferenceService = Depends(get_reference_service)) -> dict:
-    names = [collection] if collection else list(COLLECTION_KEYS)
     if collection and collection not in COLLECTION_KEYS:
         raise ApiError(404, "UNKNOWN_COLLECTION", f"unknown collection '{collection}'")
-    provider = refs.for_request(None)
-    out: dict[str, dict] = {}
-    for name in names:
-        for p in provider.providers:
-            items = await p.get(name)
-            if items:
-                out[name] = {"source": p.name, "count": len(items),
-                             "items": [{"id": i.id, "name": i.name} for i in items]}
-                break
+    names = [collection] if collection else list(COLLECTION_KEYS)
+    data, sources = await refs.for_request(None).load_with_sources(names)
+    out = {name: {"source": sources[name], "count": len(items), "items": [{"id": i.id, "name": i.name} for i in items]}
+           for name, items in data.items()}
     return {"collections": out, "missing": [n for n in names if n not in out]}

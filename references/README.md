@@ -9,6 +9,13 @@ dictionaries from one of:
    cached in memory for `REFERENCE_CACHE_TTL_SECONDS`;
 3. this local JSON file (`LOCAL_REFERENCES_PATH`) — fallback.
 
+Responses report `referenceSources` per collection. `/search` never sends IDs that came from this file to the HR
+API (`executed: false, reason: "LOCAL_REFERENCES_NOT_ALLOWED"`) unless `ALLOW_LOCAL_REFERENCES_FOR_SEARCH=true`.
+
+Real reference data should not give the same alias to two items with different meanings (e.g. "Toshkent" for both
+the city and the region): the matcher reports such values as `ambiguous` and asks the user. In this dev file
+"Toshkent" deliberately maps to Toshkent shahri only.
+
 ## Shape
 
 ```json
