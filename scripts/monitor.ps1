@@ -17,18 +17,18 @@ New-Item -ItemType Directory -Force $LogDir | Out-Null
 $LogFile = Join-Path $LogDir "monitor.log"
 
 function Get-HistogramQuantile([string]$metrics, [string]$name, [double]$q) {
-    $buckets = @()
+    # sum across label sets per bucket boundary; keys are doubles (no string round-trip: +Inf prints as "∞")
+    $sums = @{}
+    $inv = [Globalization.CultureInfo]::InvariantCulture
     foreach ($line in $metrics -split "`n") {
         if ($line -match "^${name}_bucket\{.*le=`"([^`"]+)`".*\}\s+([0-9.eE+-]+)") {
-            $le = if ($Matches[1] -eq "+Inf") { [double]::PositiveInfinity } else { [double]$Matches[1] }
-            $buckets += [pscustomobject]@{ le = $le; count = [double]$Matches[2] }
+            $le = if ($Matches[1] -eq "+Inf") { [double]::PositiveInfinity } else { [double]::Parse($Matches[1], $inv) }
+            $sums[$le] = [double]$sums[$le] + [double]::Parse($Matches[2], $inv)
         }
     }
-    if ($buckets.Count -eq 0) { return $null }
-    # sum across label sets per bucket boundary
-    $grouped = $buckets | Group-Object le | ForEach-Object {
-        [pscustomobject]@{ le = [double]$_.Name; count = ($_.Group | Measure-Object count -Sum).Sum }
-    } | Sort-Object le
+    if ($sums.Count -eq 0) { return $null }
+    $grouped = $sums.GetEnumerator() | ForEach-Object { [pscustomobject]@{ le = [double]$_.Key; count = $_.Value } } |
+        Sort-Object le
     $total = ($grouped | Select-Object -Last 1).count
     if (-not $total) { return $null }
     foreach ($b in $grouped) { if ($b.count -ge $q * $total) { return $b.le } }
