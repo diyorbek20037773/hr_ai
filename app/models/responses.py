@@ -67,6 +67,7 @@ class ResolveRequest(BaseModel):
 class ParseResponse(BaseModel):
     query: str
     intent: dict[str, Any]
+    corrections: list[str] = Field(default_factory=list)  # deterministic guard fixes applied to the LLM intent
     promptVersion: str
     latencyMs: int
 
@@ -74,6 +75,7 @@ class ParseResponse(BaseModel):
 class ResolveResponse(ResolveResult):
     query: str
     referenceSources: dict[str, str] = Field(default_factory=dict)  # collection -> request | remote | local
+    corrections: list[str] = Field(default_factory=list)  # deterministic guard fixes applied to the LLM intent
     intent: dict[str, Any]
     promptVersion: str
     latencyMs: int

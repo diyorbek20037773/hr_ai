@@ -28,7 +28,8 @@ class TypeOfService(IntEnum):
 
 TYPE_OF_POSITION_PHRASES: dict[TypeOfPosition, list[str]] = {
     TypeOfPosition.Leader: [
-        "rahbar", "raxbar", "boshliq", "direktor", "bo'lim boshlig'i", "bo'lim boshliqlari", "rahbar xodim",
+        "rahbar", "raxbar", "boshliq", "direktor", "director", "head", "bo'lim boshlig'i", "bo'lim boshliqlari",
+        "rahbar xodim",
         "руководитель", "начальник", "директор", "начальник отдела", "раҳбар", "бошлиқ",
     ],
     TypeOfPosition.Management: [

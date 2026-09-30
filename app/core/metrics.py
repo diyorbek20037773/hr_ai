@@ -23,6 +23,8 @@ GPU_MEMORY_USED = Gauge("hr_ai_gpu_memory_used_bytes", "CUDA memory allocated by
 RESOLVER_FIELDS = Counter("hr_ai_resolver_fields_total", "Resolved fields by result", ["result"])
 FUZZY_SCORE = Histogram("hr_ai_fuzzy_score", "RapidFuzz best score for fuzzy lookups",
                         buckets=(50, 60, 70, 75, 80, 85, 88, 90, 95, 100))
+INTENT_CORRECTIONS = Counter("hr_ai_intent_corrections_total", "Deterministic fixes applied to LLM intents",
+                             ["kind"])
 HR_SEARCH_REQUESTS = Counter("hr_ai_hr_search_requests_total", "Calls to the HR Search API", ["status"])
 
 for _status in ("ok", "json_error", "timeout", "error"):

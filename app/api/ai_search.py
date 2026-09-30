@@ -71,6 +71,7 @@ async def _resolve(body: ResolveRequest, parser: IntentParser, refs: ReferenceSe
                                     "recognized": len(result.recognizedFilters),
                                     "unresolved": len(result.unresolvedFilters), "ready": result.readyToSearch})
     return ResolveResponse(query=query, intent=outcome.intent.to_compact_dict(), referenceSources=sources,
+                           corrections=outcome.corrections,
                            promptVersion=outcome.prompt_version, latencyMs=latency, **result.model_dump())
 
 
@@ -82,7 +83,7 @@ async def parse(body: ParseRequest, parser: IntentParser = Depends(get_intent_pa
     outcome = await _parse(parser, query)
     latency = int((time.perf_counter() - t0) * 1000)
     log.info("parse_done", extra={**query_fingerprint(query), "durationMs": latency, "attempts": outcome.attempts})
-    return ParseResponse(query=query, intent=outcome.intent.to_compact_dict(),
+    return ParseResponse(query=query, intent=outcome.intent.to_compact_dict(), corrections=outcome.corrections,
                          promptVersion=outcome.prompt_version, latencyMs=latency)
 
 
