@@ -269,7 +269,16 @@ class QwenLLMService:
                     raise LLMTimeoutError(f"generation exceeded {self.settings.LLM_TIMEOUT_SECONDS}s")
                 return result
             finally:
-                self._lock.release()
+                # Return cached-but-unused CUDA blocks after every call. Without this the allocator cache grows with
+                # varying prompt lengths past the physical VRAM of small GPUs, and Windows (WDDM) silently spills to
+                # shared system memory: measured 6 GB RTX 3050 -> 7.4 GB reserved, single calls jumping 6 s -> 40 s.
+                try:
+                    if self._device.startswith("cuda"):
+                        torch.cuda.empty_cache()
+                except Exception:  # noqa: BLE001 — never let cache cleanup keep the lock held
+                    log.warning("cuda_empty_cache_failed")
+                finally:
+                    self._lock.release()
         finally:
             with self._waiting_lock:
                 self._waiting -= 1
