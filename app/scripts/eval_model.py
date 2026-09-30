@@ -1,6 +1,9 @@
 """Golden evaluation of the real local model -> docs/model-eval.md.
 
-    python -m app.scripts.eval_model [--limit N] [--out docs/model-eval.md]
+    python -m app.scripts.eval_model [--set all|main|hard] [--limit N] [--out docs/model-eval.md]
+
+Sets: `main` = tests/eval/golden_queries.jsonl (CLAUDE.md §7 targets are measured on it);
+`hard` = tests/eval/golden_hard.jsonl (challenge set, reported separately, no pass/fail target).
 
 Comparison per field: numbers / booleans / enums exact; strings case-insensitive after normalisation;
 dictionary-backed strings (region, specialists, ...) also count as equal when both expected and actual
@@ -31,6 +34,7 @@ from app.services.reference_provider import LocalJsonReferenceProvider
 from app.utils.text_normalizer import normalize_text
 
 GOLDEN = PROJECT_ROOT / "tests" / "eval" / "golden_queries.jsonl"
+GOLDEN_SETS = {"main": GOLDEN, "hard": PROJECT_ROOT / "tests" / "eval" / "golden_hard.jsonl"}
 _DICT_COLLECTION = {f.intent_key: f.collection for f in DICTIONARY_FIELDS}
 
 
@@ -117,12 +121,16 @@ def _pct(values: list[int], q: float) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--set", choices=["all", *GOLDEN_SETS], default="all")
     ap.add_argument("--out", default=str(PROJECT_ROOT / "docs" / "model-eval.md"))
     args = ap.parse_args(argv)
 
     settings = get_settings()
     setup_logging("WARNING", settings.resolve_path(settings.LOG_DIR))
-    entries = load_golden()
+    entries = []
+    for name, path in GOLDEN_SETS.items():
+        if args.set in ("all", name) and path.exists():
+            entries += [{**e, "set": name} for e in load_golden(path)]
     if args.limit:
         entries = entries[: args.limit]
 
@@ -155,12 +163,47 @@ def main(argv: list[str] | None = None) -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "model-eval-last.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
     core_rows = [r for r in rows if "core" in r.get("tags", [])]
-    print(f"core scenarios {sum(r['core'] for r in core_rows)}/{len(core_rows)}; "
-          f"full {sum(r['full'] for r in rows)}/{len(rows)} -> {args.out}")
+    summary = [f"core scenarios {sum(r['core'] for r in core_rows)}/{len(core_rows)}"]
+    for name in GOLDEN_SETS:
+        part = [r for r in rows if r["set"] == name]
+        if part:
+            summary.append(f"{name} full {sum(r['full'] for r in part)}/{len(part)}")
+    print("; ".join(summary) + f" -> {args.out}")
     return 0
 
 
-def render_report(rows: list[dict], latencies: list[int], first_try: int, llm: QwenLLMService) -> str:
+def _results_section(title: str, rows: list[dict]) -> list[str]:
+    lines = [f"## {title}", "", "| # | Lang | Query | Expected | Got | Core | Full | Notes | ms |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for i, r in enumerate(rows, 1):
+        notes = []
+        if r.get("mismatched"):
+            notes.append("mismatch: " + ", ".join(r["mismatched"]))
+        if r.get("invented"):
+            notes.append("invented: " + ", ".join(r["invented"]))
+        if r.get("error"):
+            notes.append(r["error"])
+        lines.append(
+            f"| {i} | {r.get('lang', '')} | {r['query'].replace('|', '/')} | `{_fmt(r['expectedIntent'])}` | "
+            f"`{_fmt(r['got'])}` | {'PASS' if r['core'] else 'FAIL'} | {'PASS' if r['full'] else 'FAIL'} | "
+            f"{'; '.join(notes)} | {r['latencyMs']} |"
+        )
+    failing = [r for r in rows if not r["full"]]
+    lines += ["", "Failing cases:", ""]
+    if not failing:
+        lines.append("None.")
+    for r in failing:
+        lines.append(f"- `{r['query']}` - expected `{_fmt(r['expectedIntent'])}`, got `{_fmt(r['got'])}`")
+    lines.append("")
+    return lines
+
+
+def render_report(all_rows: list[dict], latencies: list[int], first_try: int, llm: QwenLLMService) -> str:
+    rows = [r for r in all_rows if r["set"] == "main"]
+    if not rows:
+        raise SystemExit("render_report needs the main set: §7 targets are measured on golden_queries.jsonl only; "
+                         "use --out <scratch file> together with --set main or --set all")
+    hard = [r for r in all_rows if r["set"] == "hard"]
     n = len(rows)
     core_rows = [r for r in rows if "core" in r.get("tags", [])]
     negatives = [r for r in rows if not r["expectedIntent"]]
@@ -189,8 +232,8 @@ def render_report(rows: list[dict], latencies: list[int], first_try: int, llm: Q
         f"| Full-match accuracy | **{full_pct:.1f} %** | >= 85 % |",
         f"| Invented fields (all queries) | {invented_total} | |",
         f"| Invented fields on negative queries | {invented_neg} | 0 |",
-        f"| Valid JSON on first attempt | {first_try}/{n} | |",
-        f"| Latency p50 / p95 / max | {_pct(latencies, .5)} / {_pct(latencies, .95)} / "
+        f"| Valid JSON on first attempt (all sets) | {first_try}/{len(all_rows)} | |",
+        f"| Latency p50 / p95 / max (all sets) | {_pct(latencies, .5)} / {_pct(latencies, .95)} / "
         f"{max(latencies) if latencies else 0} ms | |",
         f"| **Targets met** | **{'YES' if targets_met else 'NO'}** | |",
         "",
@@ -198,30 +241,28 @@ def render_report(rows: list[dict], latencies: list[int], first_try: int, llm: Q
         "dictionary-backed strings also equal when both resolve to the same reference ID in "
         "`references/example_references.json`; any extra key = invented field = full FAIL.",
         "",
-        "## Results",
-        "",
-        "| # | Lang | Query | Expected | Got | Core | Full | Notes | ms |",
-        "|---|---|---|---|---|---|---|---|---|",
     ]
-    for i, r in enumerate(rows, 1):
-        notes = []
-        if r.get("mismatched"):
-            notes.append("mismatch: " + ", ".join(r["mismatched"]))
-        if r.get("invented"):
-            notes.append("invented: " + ", ".join(r["invented"]))
-        if r.get("error"):
-            notes.append(r["error"])
-        lines.append(
-            f"| {i} | {r.get('lang', '')} | {r['query'].replace('|', '/')} | `{_fmt(r['expectedIntent'])}` | "
-            f"`{_fmt(r['got'])}` | {'PASS' if r['core'] else 'FAIL'} | {'PASS' if r['full'] else 'FAIL'} | "
-            f"{'; '.join(notes)} | {r['latencyMs']} |"
-        )
-    failing = [r for r in rows if not r["full"]]
-    lines += ["", "## Failing cases", ""]
-    if not failing:
-        lines.append("None.")
-    for r in failing:
-        lines.append(f"- `{r['query']}` - expected `{_fmt(r['expectedIntent'])}`, got `{_fmt(r['got'])}`")
+    lines += _results_section("Results — main set (`golden_queries.jsonl`)", rows)
+    if hard:
+        h_full = 100.0 * sum(r["full"] for r in hard) / len(hard)
+        h_core = 100.0 * sum(r["core"] for r in hard) / len(hard)
+        h_inv = sum(len(r["invented"]) for r in hard)
+        lines += [
+            "## Challenge set (`golden_hard.jsonl`)",
+            "",
+            "Harder queries (many filters, typos, negations, mixed scripts). Used as the development set for "
+            "prompt v4-v9 and the intent guards, so this score is optimistic, not held-out. The §7 "
+            "targets are measured on the main set only.",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            f"| Queries | {len(hard)} |",
+            f"| Core-field accuracy | {h_core:.1f} % |",
+            f"| Full-match accuracy | **{h_full:.1f} %** |",
+            f"| Invented fields | {h_inv} |",
+            "",
+        ]
+        lines += _results_section("Results — challenge set", hard)
     return "\n".join(lines) + "\n"
 
 
