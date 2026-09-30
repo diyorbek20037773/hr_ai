@@ -10,6 +10,7 @@ from app.core.logging import get_logger, query_fingerprint
 from app.core.metrics import INTENT_CORRECTIONS, LLM_JSON_RETRY, LLM_REQUESTS
 from app.models.ai_intent import ParsedSearchIntent
 from app.prompts.search_parser import PROMPT_VERSION, build_messages, build_retry_messages
+from app.prompts.store import get_active
 from app.services.intent_guards import apply_all
 from app.services.llm_service import BaseLLMService, LLMTimeoutError
 from app.utils.json_parser import JsonExtractionError, extract_json_object
@@ -37,7 +38,7 @@ def _validate(raw: str) -> ParsedSearchIntent:
     return ParsedSearchIntent.model_validate(obj)
 
 
-def _finish(query: str, intent: ParsedSearchIntent, attempts: int, raw: str) -> ParseOutcome:
+def _finish(query: str, intent: ParsedSearchIntent, attempts: int, raw: str, version: str) -> ParseOutcome:
     """Apply the deterministic guards (outside the JSON-validation try, so a guard bug is never a retry)."""
     intent, fixes = apply_all(query, intent)
     for kind in fixes:
@@ -45,7 +46,7 @@ def _finish(query: str, intent: ParsedSearchIntent, attempts: int, raw: str) -> 
     if fixes:
         log.info("intent_corrected", extra={**query_fingerprint(query), "fixes": fixes})
     LLM_REQUESTS.labels(status="ok").inc()
-    return ParseOutcome(intent=intent, attempts=attempts, raw_output=raw, corrections=fixes)
+    return ParseOutcome(intent=intent, attempts=attempts, raw_output=raw, prompt_version=version, corrections=fixes)
 
 
 class IntentParser:
@@ -55,9 +56,10 @@ class IntentParser:
     def parse(self, query: str) -> ParseOutcome:
         """Blocking call — run it in a thread pool from async code."""
         query = query.strip()
+        cfg = get_active()  # one prompt for the whole request, including the corrective retry
         log.debug("parse_query", extra={"query": query})
         try:
-            raw = self.llm.generate(build_messages(query))
+            raw = self.llm.generate(build_messages(query, cfg))
         except LLMTimeoutError:
             LLM_REQUESTS.labels(status="timeout").inc()
             raise
@@ -71,11 +73,11 @@ class IntentParser:
                         extra={**query_fingerprint(query), "error": type(first_error).__name__})
             log.debug("llm_bad_output", extra={"output": raw[:500]})
         else:
-            return _finish(query, intent, 1, raw)
+            return _finish(query, intent, 1, raw, cfg.version)
 
         LLM_JSON_RETRY.inc()
         try:
-            raw2 = self.llm.generate(build_retry_messages(query, raw))
+            raw2 = self.llm.generate(build_retry_messages(query, raw, cfg))
         except LLMTimeoutError:
             LLM_REQUESTS.labels(status="timeout").inc()
             raise
@@ -88,4 +90,4 @@ class IntentParser:
             LLM_REQUESTS.labels(status="json_error").inc()
             log.warning("llm_json_invalid", extra={**query_fingerprint(query), "error": type(exc).__name__})
             raise IntentParseError("model output is not a valid search intent") from exc
-        return _finish(query, intent, 2, raw2)
+        return _finish(query, intent, 2, raw2, cfg.version)

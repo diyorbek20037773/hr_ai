@@ -137,6 +137,23 @@ Same request as `/resolve`. Response = `/resolve` fields plus:
 The HR API call is `POST {HR_SEARCH_API_URL}{HR_SEARCH_API_PATH}` with the `searchModel` JSON as body,
 `Authorization: Bearer {HR_SEARCH_API_KEY}` when set, and `X-Request-ID`.
 
+## Prompt viewer / editor (`/api/v1/prompt`)
+
+Shows exactly what Qwen receives and lets a developer try an edited prompt. The edited prompt is a **runtime
+override**: it is kept in memory only, is **not evaluated**, is reported as version `"<default>+custom"` (in
+`/health`, `promptVersion` of every parse/resolve/search response, and `promptCustom: true` in `/health`), and is
+lost on restart. To make a prompt permanent, copy it into `app/prompts/search_parser.py`, bump `PROMPT_VERSION` and
+run the eval. Disable editing in production with `PROMPT_EDITING_ENABLED=false` (GET and render keep working).
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/prompt` | `{version, defaultVersion, isCustom, editingEnabled, systemPrompt, fewShots:[{query, answer}], retryMessage, tokenCount, tokenCountQuery, tokenLimit, intentKeys, warnings}`. `tokenCount` is measured with a sample query (null while the model is not loaded) |
+| `PUT /api/v1/prompt` | body `{systemPrompt, fewShots:[{query, answer}]}` → the new state. Answers must use intent keys only, contain no `*Id` keys, and be in canonical form. Otherwise 422 `PROMPT_INVALID`. Adds a warning when the prompt exceeds `PROMPT_MAX_TOKENS` (1800) |
+| `DELETE /api/v1/prompt` | restore the committed default |
+| `POST /api/v1/prompt/render` | body `{query}` → `{messages, rendered, tokenCount, exact}`. `rendered` is the exact text after Qwen's chat template (`<\|im_start\|>system …`) when the model is loaded (`exact: true`) |
+
+PUT/DELETE with editing disabled → 403 `PROMPT_EDITING_DISABLED`.
+
 ## `GET /api/v1/references[?collection=regions]`
 
 ```json

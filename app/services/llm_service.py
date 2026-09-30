@@ -228,6 +228,10 @@ class QwenLLMService:
     def _render(self, messages: list[dict[str, str]]) -> str:
         return self._tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
+    def render_prompt(self, messages: list[dict[str, str]]) -> str:
+        """The exact text fed to the model (Qwen chat template applied)."""
+        return self._render(messages)
+
     def count_tokens(self, messages: list[dict[str, str]]) -> int:
         return len(self._tokenizer(self._render(messages))["input_ids"])
 

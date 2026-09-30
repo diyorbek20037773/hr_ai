@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     MAX_REFERENCE_ITEMS: int = 20000
     MAX_BODY_BYTES: int = 5 * 1024 * 1024
 
+    # --- prompt editing (test page / PUT /api/v1/prompt): memory-only override, never persisted ---
+    PROMPT_EDITING_ENABLED: bool = True  # set false in production
+    PROMPT_MAX_TOKENS: int = 1800
+
     @field_validator("MODEL_GPU_MAX_MEMORY_GB", mode="before")
     @classmethod
     def _empty_to_none(cls, v):

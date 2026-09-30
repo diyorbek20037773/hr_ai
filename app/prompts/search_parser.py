@@ -76,17 +76,22 @@ FEW_SHOTS: list[tuple[str, dict]] = [
 RETRY_MESSAGE = "Return only valid JSON matching the schema."
 
 
-def build_messages(query: str) -> list[dict[str, str]]:
-    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for user, answer in FEW_SHOTS:
+def build_messages(query: str, cfg=None) -> list[dict[str, str]]:
+    """Chat messages for Qwen. `cfg` is an app.prompts.store.PromptConfig; default = the active prompt."""
+    if cfg is None:
+        from app.prompts.store import get_active  # lazy: store imports this module
+
+        cfg = get_active()
+    messages: list[dict[str, str]] = [{"role": "system", "content": cfg.system_prompt}]
+    for user, answer in cfg.few_shots:
         messages.append({"role": "user", "content": user})
         messages.append({"role": "assistant", "content": json.dumps(answer, ensure_ascii=False)})
     messages.append({"role": "user", "content": query})
     return messages
 
 
-def build_retry_messages(query: str, bad_output: str) -> list[dict[str, str]]:
-    messages = build_messages(query)
+def build_retry_messages(query: str, bad_output: str, cfg=None) -> list[dict[str, str]]:
+    messages = build_messages(query, cfg)
     messages.append({"role": "assistant", "content": bad_output[:500]})
-    messages.append({"role": "user", "content": RETRY_MESSAGE})
+    messages.append({"role": "user", "content": cfg.retry_message if cfg is not None else RETRY_MESSAGE})
     return messages

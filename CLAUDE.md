@@ -176,6 +176,7 @@ or the dev's tests.
 | `dateOfReceipt` is sent as `YYYY-MM-DD` (date only) | `app/models/search.py` | send datetime if the API needs it |
 | `/search` refuses IDs from the local placeholder JSON | `ALLOW_LOCAL_REFERENCES_FOR_SEARCH` | config |
 | Real reference data carries Latin/Cyrillic/Russian spellings as aliases (dev JSON also has English spellings such as "Samarkand") | `references/`, resolver | add aliases or confirm with the HR team |
+| Prompt can be edited at runtime from the test page (memory only, version `+custom`, not evaluated) | `PROMPT_EDITING_ENABLED` | set `false` in production |
 | 6 GB dev GPU → 4-bit bitsandbytes model (`MODEL_QUANTIZATION=auto`) | `llm_service.py`, `docs/architecture.md` #6 | config |
 | Reference collections keys: `regions, districts, sexes, nations, languages, educations, specialists, eduTypes, degrees, academicDegrees, academicTitles, institutions, institutionTypes, institutionGroups, positionCategories, languageCertificates` | `app/models/references.py` | one mapping table |
 

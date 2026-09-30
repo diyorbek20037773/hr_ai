@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import ai_search, health, ui
+from app.api import ai_search, health, prompt, ui
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, request_id_var, setup_logging
 from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS, MODEL_LOADED
@@ -139,6 +139,7 @@ def create_app(settings: Settings | None = None, llm: BaseLLMService | None = No
 
     app.include_router(health.router)
     app.include_router(ai_search.router)
+    app.include_router(prompt.router)
     app.include_router(ui.router)
     return app
 

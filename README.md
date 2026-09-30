@@ -74,6 +74,11 @@ Invoke-RestMethod http://127.0.0.1:8001/ready
 .\run.ps1 -Stop
 ```
 
+Test page: **http://127.0.0.1:8001/**. Type a sentence and press **Qidirish** to see the filter chips, candidates
+and `searchModel`. Press **Prompt (Qwen'ga beriladigan)** to see the system prompt, the few-shots and the exact
+chat-template text Qwen receives. You can edit them and apply the change to the running server (memory only, not
+evaluated, reset on restart; `PROMPT_EDITING_ENABLED=false` in production).
+
 Try one query without the server: `python -m app.scripts.test_model "Oliy ma'lumotli 30 yoshdan katta ayollar"`.
 Swagger UI: http://127.0.0.1:8001/docs
 
@@ -88,6 +93,8 @@ Swagger UI: http://127.0.0.1:8001/docs
 | `POST /api/v1/ai-search/resolve` | `{query, referenceData?, first?, rows?}` → intent + `searchModel` + chips + `readyToSearch` |
 | `POST /api/v1/ai-search/search` | resolve, then call the HR Search API (`executed:false` when not configured) |
 | `GET /api/v1/references` | reference collections currently available to the resolver |
+| `GET/PUT/DELETE /api/v1/prompt`, `POST /api/v1/prompt/render` | view / runtime-edit / reset the Qwen prompt; exact rendered text |
+| `GET /` | self-contained test page (no CDN) with the prompt viewer/editor |
 
 PowerShell:
 ```powershell

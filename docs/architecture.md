@@ -38,7 +38,9 @@ The LLM emits **text only**. IDs come exclusively from reference data via the re
 | `app/api/ai_search.py` | `/api/v1/ai-search/parse`, `/resolve`, `/search`, `/api/v1/references` |
 | `app/api/health.py` | `/health`, `/ready`, `/metrics` |
 | `app/services/llm_service.py` | `BaseLLMService` protocol, `QwenLLMService` (model discovery + completeness check, device/dtype/quantization choice, greedy generation under a lock, timeout), `FakeLLMService` |
-| `app/prompts/search_parser.py` | versioned system prompt + few-shots (`PROMPT_VERSION`) |
+| `app/prompts/search_parser.py` | versioned system prompt + few-shots (`PROMPT_VERSION`) — the committed default |
+| `app/prompts/store.py` | active prompt: the default or a memory-only runtime override (`+custom`) |
+| `app/api/prompt.py`, `app/api/ui.py` | prompt view/edit/render API; test page at `/` |
 | `app/services/intent_parser.py` | messages → LLM → JSON extraction → `ParsedSearchIntent` → guards; one corrective retry; `LLM_OUTPUT_INVALID` |
 | `app/services/intent_guards.py` | deterministic post-checks driven by the query text: age direction fix; drop numbers, education, sex, hiring date and position types with no evidence; move position types out of
 `specialists` and canonicalise them to enum names (`["Leader","Director"]` -> `["Leader"]`). Codes returned as `corrections` |

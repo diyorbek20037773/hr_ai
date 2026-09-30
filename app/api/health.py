@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.core.metrics import render_metrics
-from app.prompts.search_parser import PROMPT_VERSION
+from app.prompts.store import get_active
 
 router = APIRouter(tags=["health"])
 
@@ -32,7 +32,8 @@ async def health(request: Request) -> dict:
     return {
         "status": "ok",
         **info,
-        "promptVersion": PROMPT_VERSION,
+        "promptVersion": get_active().version,
+        "promptCustom": get_active().is_custom,
         "uptimeSeconds": round(time.monotonic() - request.app.state.started_at, 1),
     }
 
