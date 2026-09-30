@@ -92,7 +92,7 @@ def write_section(text: str) -> None:
     doc = path.read_text(encoding="utf-8") if path.exists() else "# Operations\n\n"
     pattern = re.compile(rf"{re.escape(SECTION)}\n.*?(?=\n## |\Z)", re.DOTALL)
     doc = pattern.sub(text.rstrip() + "\n", doc) if SECTION in doc else doc.rstrip() + "\n\n" + text
-    path.write_text(doc, encoding="utf-8")
+    path.write_text(doc, encoding="utf-8", newline="\n")  # keep LF on Windows
 
 
 def main(argv: list[str] | None = None) -> int:

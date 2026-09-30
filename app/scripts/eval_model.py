@@ -158,10 +158,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{i}/{len(entries)}] core={'PASS' if res['core'] else 'FAIL'} "
               f"full={'PASS' if res['full'] else 'FAIL'} {ms}ms {entry['query'][:60]} -> {_fmt(got)}", flush=True)
 
-    Path(args.out).write_text(render_report(rows, latencies, first_try, llm), encoding="utf-8")
+    # newline="\n": keep LF on Windows (the repo is LF, see .gitattributes)
+    Path(args.out).write_text(render_report(rows, latencies, first_try, llm), encoding="utf-8", newline="\n")
     log_dir = settings.resolve_path(settings.LOG_DIR)
     log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / "model-eval-last.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    (log_dir / "model-eval-last.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1),
+                                                  encoding="utf-8", newline="\n")
     core_rows = [r for r in rows if "core" in r.get("tags", [])]
     summary = [f"core scenarios {sum(r['core'] for r in core_rows)}/{len(core_rows)}"]
     for name in GOLDEN_SETS:
