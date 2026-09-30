@@ -39,7 +39,9 @@ The LLM emits **text only**. IDs come exclusively from reference data via the re
 | `app/api/health.py` | `/health`, `/ready`, `/metrics` |
 | `app/services/llm_service.py` | `BaseLLMService` protocol, `QwenLLMService` (model discovery + completeness check, device/dtype/quantization choice, greedy generation under a lock, timeout), `FakeLLMService` |
 | `app/prompts/search_parser.py` | versioned system prompt + few-shots (`PROMPT_VERSION`) |
-| `app/services/intent_parser.py` | messages → LLM → JSON extraction → `ParsedSearchIntent`; one corrective retry; `LLM_OUTPUT_INVALID` |
+| `app/services/intent_parser.py` | messages → LLM → JSON extraction → `ParsedSearchIntent` → guards; one corrective retry; `LLM_OUTPUT_INVALID` |
+| `app/services/intent_guards.py` | deterministic post-checks driven by the query text: age direction fix; drop numbers, education, sex, hiring date and position types with no evidence; move position types out of
+`specialists` and canonicalise them to enum names (`["Leader","Director"]` -> `["Leader"]`). Codes returned as `corrections` |
 | `app/utils/json_parser.py` | conservative JSON extraction (fences, first balanced object, trailing commas) — never evaluates output |
 | `app/services/fuzzy_matcher.py` | exact name → exact alias → RapidFuzz, thresholds from config |
 | `app/services/filter_resolver.py` | intent → `SearchModel` + `recognizedFilters` / `unresolvedFilters` / `warnings` / `readyToSearch` |
@@ -90,3 +92,17 @@ reason:"NOT_READY_TO_SEARCH"`; else POST `searchModel` to the HR API and return 
    the same answers on the core scenarios. On a GPU with ≥ 9 GB free the model runs unquantized in bf16.
 7. **Background model load.** `/health` must answer during the load so monitors can distinguish "starting" from
    "down"; `/ready` is the gate for traffic.
+8. **Deterministic intent guards** (`intent_guards.py`). Prompt iterations showed two failure modes a 4B model does
+   not fix reliably by wording alone: the age direction of Uzbek Cyrillic "N ёшдан катта" (sometimes `toAge`), and
+   invented values (an age from "ёш", an education from a profession). Guards only use the literal query: they move
+   an age to the side its phrase states; drop numeric values whose digits are not in the query, an education with
+   no education word, a sex with no gender word and a `dateOfReceipt` with no hiring word; move a position type placed in `specialists` ("mutaxassislar"
+   -> "Expert") to `typeOfPosition`; drop a position type with none of its stems in the query ("кадрлар" is not
+   "ProductionEmployee"). They never add values. Limitations: numbers written as words ("o'ttiz") are dropped;
+   evidence stems are substrings, so e.g. "qiz" inside "Qiziltepa" counts as a gender word (fails safe: keeps).
+   Every correction increments `hr_ai_intent_corrections_total{kind}`.
+9. **CUDA cache released after every generation** (`torch.cuda.empty_cache()` in `QwenLLMService.generate`). With
+   prompts of varying length the PyTorch allocator cache grew from 4.2 GB to 7.4 GB reserved on the 6 GB dev GPU
+   (only 2.7 GB actually allocated). Windows (WDDM) then spills silently into shared system memory and single calls
+   jump from ~6 s to ~40 s. Releasing the cache keeps reserved memory at ~2.8 GB; measured over the same 50-query
+   sequence: p95 34.6 s -> 8.7 s, max 42.3 s -> 10.7 s. Cost: a few ms per call.

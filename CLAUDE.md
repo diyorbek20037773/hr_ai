@@ -29,6 +29,7 @@ Manual Advanced Search and AI Smart Search are two entry points that converge on
 User text
   → app/services/llm_service.py      QwenLLMService — local model, loaded ONCE per process
   → app/services/intent_parser.py    system prompt + robust JSON parsing → ParsedSearchIntent
+  → app/services/intent_guards.py    deterministic, query-driven fixes (age direction, drop unstated values)
   → app/services/filter_resolver.py  exact → alias → RapidFuzz → numeric IDs / enums
   → app/models/search.py             SearchModel  (Python twin of ISearchModel)
   → app/services/search_client.py    HrSearchClient → existing HR Search API (httpx)
@@ -91,7 +92,7 @@ hr_ai/
 │   ├── core/            config.py, logging.py, metrics.py, security.py
 │   ├── models/          ai_intent.py, search.py, references.py, responses.py, enums.py, labels.py
 │   ├── prompts/         search_parser.py (system prompt + few-shots)
-│   ├── services/        llm_service.py, intent_parser.py, fuzzy_matcher.py,
+│   ├── services/        llm_service.py, intent_parser.py, intent_guards.py, fuzzy_matcher.py,
 │   │                    filter_resolver.py, reference_provider.py, search_client.py
 │   ├── scripts/         test_model.py, eval_model.py, load_test.py
 │   └── utils/           text_normalizer.py, json_parser.py
@@ -100,7 +101,7 @@ hr_ai/
 │   ├── unit/            no model, fast
 │   ├── integration/     FastAPI TestClient + FakeLLMService
 │   ├── model/           real inference, marker `model`
-│   └── eval/            golden_queries.jsonl
+│   └── eval/            golden_queries.jsonl (main), golden_hard.jsonl (challenge)
 ├── scripts/             monitor.ps1, smoke_test.ps1, watchdog.ps1
 ├── ops/                 docker-compose.monitoring.yml, prometheus.yml (optional, not required)
 ├── docs/                architecture.md, api.md, frontend-integration.md, operations.md,
@@ -149,6 +150,9 @@ or the dev's tests.
 - Tests that run real inference carry `@pytest.mark.model` (registered in `pyproject.toml`).
 - Golden eval set: `tests/eval/golden_queries.jsonl` (≥ 20 queries: uz-Latin, uz-Cyrillic, Russian,
   typos, "no filter" negatives). `python -m app.scripts.eval_model` writes `docs/model-eval.md`.
+- Challenge set: `tests/eval/golden_hard.jsonl` — reported separately, no pass/fail target. It was used while
+  developing prompt v4–v9 and the intent guards, so its score is optimistic; a fresh held-out set is needed to
+  measure generalisation.
 - Targets: the 10 core scenarios in `docs/model-eval.md` must all pass on their core fields; overall
   ≥ 85 %. Prompt changes require re-running eval before commit.
 - After any code change: run the relevant tests. After any change in `app/prompts/` or
@@ -171,6 +175,7 @@ or the dev's tests.
 | When `HR_SEARCH_API_URL` is empty, `/search` returns `searchModel` with `executed: false` | `search_client.py` | none |
 | `dateOfReceipt` is sent as `YYYY-MM-DD` (date only) | `app/models/search.py` | send datetime if the API needs it |
 | `/search` refuses IDs from the local placeholder JSON | `ALLOW_LOCAL_REFERENCES_FOR_SEARCH` | config |
+| Real reference data carries Latin/Cyrillic/Russian spellings as aliases (dev JSON also has English spellings such as "Samarkand") | `references/`, resolver | add aliases or confirm with the HR team |
 | 6 GB dev GPU → 4-bit bitsandbytes model (`MODEL_QUANTIZATION=auto`) | `llm_service.py`, `docs/architecture.md` #6 | config |
 | Reference collections keys: `regions, districts, sexes, nations, languages, educations, specialists, eduTypes, degrees, academicDegrees, academicTitles, institutions, institutionTypes, institutionGroups, positionCategories, languageCertificates` | `app/models/references.py` | one mapping table |
 

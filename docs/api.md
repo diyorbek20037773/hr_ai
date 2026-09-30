@@ -32,7 +32,7 @@ Liveness — always 200 while the process runs.
 
 ```json
 { "status": "ok", "modelLoaded": true, "modelStatus": "loaded", "modelPath": "D:\\myprojects\\hr_ai\\model",
-  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "3", "uptimeSeconds": 431.2 }
+  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "8", "uptimeSeconds": 431.2 }
 ```
 
 `modelStatus`: `loading | loaded | failed | not_loaded`.
@@ -54,8 +54,17 @@ Response:
 ```json
 { "query": "Oliy ma'lumotli, 30 yoshdan katta ayollar",
   "intent": { "education": "Oliy", "fromAge": 30, "sex": "Ayol" },
-  "promptVersion": "3", "latencyMs": 5210 }
+  "promptVersion": "8", "latencyMs": 5210 }
 ```
+
+`intent` is the model output after deterministic guards (age direction fixed from the query wording; ages, years,
+experience without the digits in the query, education without an education word and sex without a gender word are
+removed, as is a `dateOfReceipt` without a hiring word; a position type found in `specialists` is moved to
+`typeOfPosition` and position types are rewritten to their enum names without duplicates; a position type with no matching word
+in the query is removed).
+
+`corrections` (also in `/resolve` and `/search`) lists the guard codes applied, e.g. `["toAge->fromAge", "drop:sex"]`,
+so the UI can tell the user that a value was adjusted or ignored; `[]` when none.
 
 `intent` keys (text values only, only those the user mentioned): `region, birthRegion, district, sex, nation,
 language, languageCertificate, education, eduType, degree, academicDegree, academicTitle, specialists[],
@@ -82,7 +91,7 @@ Response:
 {
   "query": "…",
   "intent": { "district": "Chilonzor", "language": "Ingliz tili", "languageCertificate": "IELTS", "toAge": 35 },
-  "promptVersion": "3",
+  "promptVersion": "8",
   "latencyMs": 5873,
   "referenceSources": { "districts": "request", "languages": "local", "languageCertificates": "local" },
   "searchModel": { "districtId": 102, "languageId": 3, "toAge": 35, "academicTitleId": 0,

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "3"
+PROMPT_VERSION = "10"
 
 SYSTEM_PROMPT = """You are a search-query parser for an HR personnel advanced-search system.
 Convert the user's request (Uzbek Latin, Uzbek Cyrillic or Russian) into ONE JSON object using only these keys:
@@ -23,44 +23,40 @@ Convert the user's request (Uzbek Latin, Uzbek Cyrillic or Russian) into ONE JSO
 "term":str}
 
 Rules:
-- Include ONLY criteria the user explicitly stated. Omit every other key. Never guess, never add defaults.
-  Never infer one field from another (a profession says nothing about education).
-- If the request has no concrete criterion, output {}.
-- Never output IDs or numbers for places, specialities, education etc. - only their names.
-- Places, languages, specialities: Uzbek Latin letters only, base form without suffixes (Toshkentda -> "Toshkent",
-  в Самарканде -> "Samarqand", ingliz tilini -> "Ingliz tili"). A profession becomes its field:
-  iqtisodchi/экономист -> "Iqtisodiyot", o'qituvchi -> "Pedagogika".
+- Include ONLY criteria the user explicitly stated; omit other keys. Never guess, add defaults, or infer one field
+  from another. No concrete criterion -> {}. Never output IDs - only names.
+- Places, languages, specialities: Uzbek Latin base form, no suffixes (Toshkentda -> "Toshkent",
+  ingliz tilini -> "Ingliz tili"). A profession becomes its field: iqtisodchi/экономист -> "Iqtisodiyot".
 - Place where people live/work -> region/district; place of birth (tug'ilgan, туғилган, родившиеся) -> birthRegion.
-- sex: "Erkak" (erkak, мужчины) or "Ayol" (ayol, аёл, женщины).
-- education: "Oliy" (oliy, олий, высшее), "O'rta maxsus", "O'rta".
-- Age: "30 yoshdan katta"/"30 ёшдан катта"/"старше 30" -> fromAge 30 (katta = older = minimum age);
-  "40 yoshgacha"/"40 ёшгача"/"до 40 лет" -> toAge 40;
-  "25-40 yosh"/"от 25 до 40" -> fromAge 25, toAge 40. Birth years -> fromYear/toYear.
+- sex: "Erkak" | "Ayol". education: "Oliy" (олий, высшее), "O'rta maxsus", "O'rta".
+- MINIMUM age -> fromAge: "30 yoshdan katta", "30 ёшдан катта", "старше 30".
+- MAXIMUM age -> toAge: "40 yoshgacha", "40 ёшгача", "до 40 лет", "моложе 40", "не старше 40".
+- Range "25-40 yosh", "от 25 до 40" -> fromAge 25, toAge 40. Birth years -> fromYear/toYear.
 - Experience: "kamida 5 yil", "5 yildan ortiq staj", "стаж от 5 лет" -> experienceYear 5.
 - typeOfPosition: rahbar/boshliq/direktor/руководитель/начальник -> "Leader"; boshqaruv xodimi/menejer -> "Management";
-  texnik -> "Technic"; mutaxassis/ekspert/специалист -> "Expert"; ishlab chiqarish xodimi -> "ProductionEmployee";
-  xizmat ko'rsatuvchi xodim -> "ServiceEmployee". Use only these names; synonyms of one type give one value
-  (boshliq and direktor are both "Leader").
+  texnik -> "Technic"; mutaxassis(lar)/ekspert/специалист -> "Expert";
+  ishlab chiqarish xodimi -> "ProductionEmployee"; xizmat ko'rsatuvchi xodim -> "ServiceEmployee".
+  Only these names, each once (boshliq+direktor -> ["Leader"]).
 - typeOfService: davlat xizmatchisi/госслужащий -> "CivilServant"; davlat xizmatchisi bo'lmagan -> "NotCivilServant".
-- Booleans only when stated: mukofotlangan/награждённый -> isAwarded; zaxirada -> isReserved;
+- Organisation kind (vazirlik, qo'mita, agentlik, hokimlik/хокимият, bank) -> institutionTypes, singular Uzbek Latin
+  ("Vazirlik", "Hokimlik"). institutionGroups only for "respublika/hududiy tashkilotlar".
+- academicTitle: dotsent/доцент -> "Dotsent", professor -> "Professor". academicDegree: fan nomzodi/кандидат наук ->
+  "Fan nomzodi", fan doktori/доктор наук -> "Fan doktori", "PhD", "DSc".
+- Booleans: mukofotlangan/награждённый -> isAwarded; zaxirada -> isReserved;
   ilmiy darajasi bor -> isAcademicDegree; ilmiy unvoni bor -> isAcademicTitle; xorijda o'qigan -> isGlobalEducation.
-- Person names (firstName, lastName, middleName): copy exactly as written, in the same alphabet
-  (Тошматов stays "Тошматов", never transliterate).
-- term: only for a stated topic that fits no other key.
-- Output JSON only. No explanations, no markdown."""
+- Person names: copy exactly as written, same alphabet, never transliterate.
+- term: only for a concrete topic that fits no other key (e.g. "blokcheyn"), never for adjectives or xodim/kadr.
+- Output JSON only, no text or markdown."""
 
 FEW_SHOTS: list[tuple[str, dict]] = [
     ("Buxoro viloyatida yashovchi 45 yoshgacha erkaklar",
      {"region": "Buxoro viloyati", "toAge": 45, "sex": "Erkak"}),
-    ("Юнусобод туманидаги 40 ёшдан катта ўрта махсус маълумотли аёллар",
-     {"district": "Yunusobod", "fromAge": 40, "education": "O'rta maxsus", "sex": "Ayol"}),
-    ("Юристы из Ферганы в возрасте от 28 до 50 лет, госслужащие",
-     {"specialists": ["Huquqshunoslik"], "region": "Farg'ona", "fromAge": 28, "toAge": 50,
-      "typeOfService": "CivilServant"}),
+    ("Юнусобод туманида ишлайдиган, камида 7 йил стажи бор ўрта махсус маълумотли техниклар",
+     {"district": "Yunusobod", "experienceYear": 7, "education": "O'rta maxsus", "typeOfPosition": ["Technic"]}),
     ("kamida 10 yil ish stajiga ega texnik xodimlar va mutaxassislar",
      {"experienceYear": 10, "typeOfPosition": ["Technic", "Expert"]}),
-    ("Ismi Dilnoza, otasining ismi Rustamovna",
-     {"firstName": "Dilnoza", "middleName": "Rustamovna"}),
+    ("Исми Дилноза, отасининг исми Рустамовна",
+     {"firstName": "Дилноза", "middleName": "Рустамовна"}),
     ("Ilmiy unvoni bor, zaxirada turgan, nemis tilini biladigan xodimlar",
      {"isAcademicTitle": True, "isReserved": True, "language": "Nemis tili"}),
     ("Руководители с фамилией Смирнов и сертификатом TOEFL",
@@ -71,7 +67,10 @@ FEW_SHOTS: list[tuple[str, dict]] = [
      {"fromYear": 1985, "toYear": 1995, "specialists": ["Axborot texnologiyalari"]}),
     ("Xorijda o'qigan, fan nomzodi darajasiga ega xodimlar",
      {"isGlobalEducation": True, "academicDegree": "Fan nomzodi"}),
-    ("eng zo'r xodimlarni ko'rsat", {}),
+    ("Врачи из Ферганы старше 40 лет, профессора, госслужащие, работающие в агентствах",
+     {"specialists": ["Tibbiyot"], "region": "Farg'ona", "fromAge": 40, "academicTitle": "Professor",
+      "typeOfService": "CivilServant", "institutionTypes": ["Agentlik"]}),
+    ("Менга ажойиб жамоа керак", {}),
 ]
 
 RETRY_MESSAGE = "Return only valid JSON matching the schema."

@@ -20,7 +20,7 @@ MANUAL ADVANCED SEARCH  ─┐
                          ├─►  ISearchModel  ─►  existing HR Search API  ─►  SearchResultDTO[] + totalItems
 AI SMART SEARCH (this)  ─┘
 
-text ─► QwenLLMService ─► intent_parser (JSON) ─► filter_resolver (exact → alias → RapidFuzz → IDs) ─► SearchModel ─► HrSearchClient
+text ─► QwenLLMService ─► intent_parser (JSON) ─► intent_guards ─► filter_resolver (exact → alias → RapidFuzz → IDs) ─► SearchModel ─► HrSearchClient
 ```
 
 Details: [docs/architecture.md](docs/architecture.md) · API: [docs/api.md](docs/api.md) ·
@@ -32,10 +32,11 @@ Eval: [docs/model-eval.md](docs/model-eval.md) · Machine: [docs/environment.md]
 ```
 app/        main.py, api/ (ai_search, health), core/ (config, logging, metrics, security),
             models/ (ai_intent, search, references, responses, enums, labels), prompts/ (search_parser),
-            services/ (llm_service, intent_parser, fuzzy_matcher, filter_resolver, reference_provider, search_client),
+            services/ (llm_service, intent_parser, intent_guards, fuzzy_matcher, filter_resolver, reference_provider,
+                       search_client),
             scripts/ (test_model, eval_model, load_test), utils/ (text_normalizer, json_parser)
 references/ example_references.json (dev data, placeholder IDs)
-tests/      unit/, integration/, model/ (marker `model`), eval/golden_queries.jsonl
+tests/      unit/, integration/, model/ (marker `model`), eval/golden_queries.jsonl (main), eval/golden_hard.jsonl (challenge)
 scripts/    monitor.ps1, smoke_test.ps1, watchdog.ps1          run.ps1 (start/stop)
 ops/        optional Prometheus + Grafana compose
 model/      Qwen3-4B-Instruct-2507 weights (read only, not in git)
@@ -137,7 +138,7 @@ existing Search API. See [examples/frontend-integration.ts](examples/frontend-in
 ruff check app tests
 pytest -m "not model" -q          # unit + integration, fake LLM, < 60 s
 pytest -m model -q                # real model
-python -m app.scripts.eval_model  # golden set -> docs/model-eval.md
+python -m app.scripts.eval_model  # main + challenge sets -> docs/model-eval.md (--set main|hard|all)
 ```
 
 ## Troubleshooting
@@ -148,6 +149,7 @@ python -m app.scripts.eval_model  # golden set -> docs/model-eval.md
 | `CUDA not available — running on CPU` | install the CUDA torch wheel matching `nvidia-smi`; CPU float32 needs ~16 GB RAM |
 | CUDA out of memory | close other GPU apps; `MODEL_QUANTIZATION=4bit`; don't run eval/tests while the server holds the GPU |
 | ~40 s per query | you are in GPU+CPU offload (`MODEL_QUANTIZATION=none` on a small GPU) — use `auto`/`4bit` |
+| occasional 30–40 s calls on a small GPU | VRAM spilled to Windows shared memory; `nvidia-smi` shows the GPU full. Fixed by releasing the CUDA cache after each call (architecture decision 9); close other GPU apps |
 | slow CPU inference | expected; use a GPU; keep one worker |
 | `LLM_OUTPUT_INVALID` | model returned non-JSON twice; rephrase; check `hr_ai_llm_requests_total{status="json_error"}` |
 | `/search` returns `executed: false` | set `HR_SEARCH_API_URL` (+ path / key) in `.env` |
