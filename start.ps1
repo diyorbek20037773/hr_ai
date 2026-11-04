@@ -218,6 +218,10 @@ if ($Action -ne "up") {
     exit 0
 }
 
+# Keep the laptop awake while this runs: sleep stops Docker Desktop in the middle of the long first download.
+Add-Type -Namespace HrAi -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
+[void][HrAi.Power]::SetThreadExecutionState([uint32]2147483649)  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+
 $hw = Get-Hardware
 $script:Overlay = $hw.Overlay
 Info "Aniqlangan qurilma: $($hw.Name) (torch $($hw.Version), $($hw.Index))"

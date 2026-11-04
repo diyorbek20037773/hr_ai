@@ -53,6 +53,8 @@ Device selection (`MODEL_DEVICE=auto`, `MODEL_QUANTIZATION=auto`): GPU in bf16 i
 GPU a 4-bit (bitsandbytes NF4) model fully on the GPU; without CUDA the CPU (slow; float32 needs ~16 GB RAM).
 On the dev laptop (RTX 3050, 6 GB) that is 4-bit on the GPU: about 3.3 s per query (p50).
 
+O'zbekcha yo'riqnoma: [ISHGA_TUSHIRISH.md](ISHGA_TUSHIRISH.md)
+
 ## Quick start with Docker (any computer)
 
 Needs Docker with Compose 2.24+, plus about 30 GB of free disk on the first run (image ~12 GB, model ~8 GB).
