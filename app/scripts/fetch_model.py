@@ -86,6 +86,7 @@ def main() -> int:
               "Restore the files, or use the Hugging Face copy: ./start.sh --download-model "
               "(Windows: start.bat -DownloadModel).", file=sys.stderr)
         return 2
+    path.mkdir(parents=True, exist_ok=True)
     if not has_disk_space(path):
         print(f"Not enough free disk for the model (about {MODEL_BYTES / 1e9:.0f} GB is needed). Free some space "
               "or enlarge Docker's disk, then run the start command again.", file=sys.stderr)
@@ -94,9 +95,11 @@ def main() -> int:
     print(f"Downloading {repo}@{revision[:12]} to {path} (about 8 GB, resumable)...", flush=True)
     try:
         download(path, repo, revision)
-    except Exception as exc:  # noqa: BLE001 — any failure here has the same remedy
-        print(f"Model download failed ({type(exc).__name__}: {exc}). Check the internet connection and run the start "
-              "command again: the download resumes where it stopped.", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 — every failure ends in the same "fix it and re-run" advice
+        no_space = getattr(exc, "errno", None) == errno.ENOSPC
+        remedy = "Free some disk space" if no_space else "Check the internet connection"
+        print(f"Model download failed ({type(exc).__name__}: {exc}). {remedy} and run the start command again: the "
+              "download resumes where it stopped.", file=sys.stderr)
         return 1
     complete, detail = is_complete(path)
     if not complete:
