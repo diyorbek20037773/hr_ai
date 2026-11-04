@@ -1,0 +1,7 @@
+# Allow-list: the build context must stay small and must never contain weights, secrets or logs.
+*
+!app/
+!references/
+!requirements.txt
+**/__pycache__/
+**/*.py[cod]

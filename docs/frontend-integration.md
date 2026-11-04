@@ -56,5 +56,6 @@ production frontend origin in `.env`.
 
 ## Latency
 
-One local model serves requests one at a time: ~5 s per query on the dev GPU (RTX 3050 6 GB, 4-bit). Show a
+One local model serves requests one at a time: about 3.3 s per query on the dev GPU (RTX 3050 6 GB, 4-bit), minutes
+on a CPU-only machine. Show a
 spinner, debounce the input (search on Enter / button, not on each keystroke).

@@ -253,7 +253,7 @@ def render_report(all_rows: list[dict], latencies: list[int], first_try: int, ll
             "## Challenge set (`golden_hard.jsonl`)",
             "",
             "Harder queries (many filters, typos, negations, mixed scripts). Used as the development set for "
-            "prompt v4-v9 and the intent guards, so this score is optimistic, not held-out. The §7 "
+            "prompt v4-v11 and the intent guards, so this score is optimistic, not held-out. The §7 "
             "targets are measured on the main set only.",
             "",
             "| Metric | Value |",

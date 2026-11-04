@@ -108,3 +108,13 @@ reason:"NOT_READY_TO_SEARCH"`; else POST `searchModel` to the HR API and return 
    (only 2.7 GB actually allocated). Windows (WDDM) then spills silently into shared system memory and single calls
    jump from ~6 s to ~40 s. Releasing the cache keeps reserved memory at ~2.8 GB; measured over the same 50-query
    sequence: p95 34.6 s -> 8.7 s, max 42.3 s -> 10.7 s. Cost: a few ms per call.
+
+10. **Docker with one image per accelerator, chosen on the host.** A single image cannot match every driver, and
+    `torch` is the only part that differs, so `start.sh` / `start.ps1` choose the torch build from what the host
+    reports and pass it as build args. The torch layer comes first so application changes rebuild in seconds. The model
+    is not baked into the image: it lives in a volume that survives upgrades. The download is a separate one-shot
+    `model-init` service, which keeps the API offline with `local_files_only=True` (CLAUDE.md §3.1).
+11. **Compact prompt (v11, ~1190 tokens, was ~1750).** Reading the prompt took 2-3 s of every call, and few-shot JSON
+    with spaces also lengthened the output. v11 lists keys without a JSON schema, keeps 8 few-shots and writes JSON
+    without spaces. Latency fell from about 6-8 s (v10) to 3.3 s p50 on the same server, with main set 30/30 and core 10/10. The
+    cost is the challenge set: 31/35 -> 27/35. Guards took over the rules that wording could not hold reliably.

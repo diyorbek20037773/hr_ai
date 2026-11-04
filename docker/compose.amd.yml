@@ -1,0 +1,9 @@
+# AMD GPU through ROCm: Linux hosts only (needs the amdgpu driver with /dev/kfd and /dev/dri).
+services:
+  api:
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - ${HR_AI_RENDER_GID:-109}
+      - ${HR_AI_VIDEO_GID:-44}

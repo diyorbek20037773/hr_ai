@@ -12,7 +12,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 ENV_FILE=.env.docker
 PORT="${HR_AI_PORT:-8001}"
 GRAFANA_PORT="${HR_AI_GRAFANA_PORT:-3001}"
-MIN_RAM_CPU_GIB=10    # bf16 weights ~8 GB
+MIN_RAM_CPU_MIB=9500  # bf16 weights ~8 GB; a Docker VM set to 10 GB reports about 9.7 GiB
 MIN_VRAM_MB=4500      # 4-bit model ~2.8 GB + ~2 GB transient while generating
 READY_TIMEOUT=900
 
@@ -22,7 +22,7 @@ for arg in "$@"; do
     up|stop|status|logs) ACTION="$arg" ;;
     --cpu) FORCE_CPU=1 ;;
     --download-model) FORCE_DOWNLOAD=1 ;;
-    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Noma'lum parametr: $arg (./start.sh --help)" >&2; exit 2 ;;
   esac
 done
@@ -38,11 +38,24 @@ compose() {
 load_state() {
   [ -f "$ENV_FILE" ] || die "$ENV_FILE topilmadi. Avval ./start.sh ni ishga tushiring."
   OVERLAY="$(sed -n 's/^HR_AI_OVERLAY=//p' "$ENV_FILE")"
+  PORT="$(sed -n 's/^HR_AI_PORT=//p' "$ENV_FILE")"
+}
+
+check_compose_version() {
+  local version major minor
+  version="$(docker compose version --short 2>/dev/null || true)"
+  version="${version#v}"
+  major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
+  case "$major$minor" in ''|*[!0-9]*) die "Docker Compose v2.24+ kerak: https://docs.docker.com/compose/install/" ;; esac
+  if [ "$major" -lt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -lt 24 ]; }; then
+    die "Docker Compose $version eski, v2.24+ kerak: https://docs.docker.com/compose/install/"
+  fi
 }
 
 ensure_docker() {
   command -v docker >/dev/null 2>&1 || die "Docker o'rnatilmagan: https://docs.docker.com/get-docker/"
-  docker compose version >/dev/null 2>&1 || die "Docker Compose v2 kerak: https://docs.docker.com/compose/install/"
+  command -v curl >/dev/null 2>&1 || die "curl o'rnatilmagan. Ubuntu/Debian: sudo apt install curl"
+  check_compose_version
   if ! docker info >/dev/null 2>&1; then
     if [ "$(uname -s)" = Darwin ]; then
       info "Docker Desktop ishga tushirilmoqda..."
@@ -72,7 +85,11 @@ detect_hardware() {
     ACCEL="$TORCH_INDEX" OVERLAY=nvidia INSTALL_BNB=1
     MODEL_DEVICE=auto MODEL_DTYPE=auto MODEL_QUANTIZATION=auto LLM_TIMEOUT=60
     HW="NVIDIA ${line%%,*}, ${vram} MiB VRAM, CUDA $cuda"
-    [ "$vram" -ge "$MIN_VRAM_MB" ] || warn "VRAM ${vram} MiB: model sig'may qolishi mumkin (kamida ${MIN_VRAM_MB} MiB tavsiya)."
+    if [ "$vram" -lt "$MIN_VRAM_MB" ]; then
+      # The 4-bit model would run out of memory: split it between GPU and RAM instead (slow, but it works).
+      warn "VRAM ${vram} MiB kam (${MIN_VRAM_MB} MiB dan past): model GPU va RAM orasida bo'linadi, javoblar sekinroq bo'ladi."
+      INSTALL_BNB=0 MODEL_QUANTIZATION=none LLM_TIMEOUT=180
+    fi
     return 0
   fi
 
@@ -91,11 +108,27 @@ detect_hardware() {
 }
 
 check_memory() {
-  local mem_gib
-  mem_gib=$(( $(docker info --format '{{.MemTotal}}') / 1024 / 1024 / 1024 ))
-  if [ "$OVERLAY" = cpu ] && [ "$mem_gib" -lt "$MIN_RAM_CPU_GIB" ]; then
-    die "Docker'ga ${mem_gib} GiB RAM berilgan, CPU rejimi uchun kamida ${MIN_RAM_CPU_GIB} GiB kerak. Docker Desktop > Settings > Resources."
+  local mem_mib
+  mem_mib=$(( $(docker info --format '{{.MemTotal}}') / 1024 / 1024 ))
+  [ "$mem_mib" -lt "$MIN_RAM_CPU_MIB" ] || return 0
+  if [ "$OVERLAY" = cpu ]; then
+    die "Docker'ga ${mem_mib} MiB RAM berilgan, CPU rejimi uchun kamida 10 GB kerak. Docker Desktop > Settings > Resources."
+  elif [ "$MODEL_QUANTIZATION" = none ]; then
+    warn "Docker'ga ${mem_mib} MiB RAM berilgan: model GPU va RAM orasida bo'linadi, 10 GB tavsiya etiladi."
   fi
+}
+
+port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+check_ports() {
+  local own p
+  own="$(docker ps --filter label=com.docker.compose.project=hr_ai --format '{{.Ports}}')"
+  for p in "$PORT" "$GRAFANA_PORT"; do
+    case "$own" in *":$p->"*) continue ;; esac
+    if port_busy "$p"; then
+      die "$p-port band. Boshqa port bilan: HR_AI_PORT=8011 HR_AI_GRAFANA_PORT=3011 ./start.sh"
+    fi
+  done
 }
 
 write_env() {
@@ -133,19 +166,23 @@ gpu_preflight() {
         "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)" || die \
         "GPU konteynerga ko'rinmayapti. Linux: nvidia-container-toolkit o'rnating (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), Windows: Docker Desktop WSL2 rejimida bo'lsin. GPU'siz davom etish: ./start.sh --cpu" ;;
     amd)
-      docker run --rm --device /dev/kfd --device /dev/dri --entrypoint python "hr_ai:$ACCEL" -c \
+      compose run --rm --no-deps --entrypoint python api -c \
         "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)" || die \
         "AMD GPU konteynerga ko'rinmayapti: amdgpu drayverini va GPU'ning ROCm ro'yxatida borligini tekshiring. GPU'siz davom etish: ./start.sh --cpu" ;;
   esac
 }
 
 wait_ready() {
-  local i health
+  local i health cid restarts
   info "Model yuklanmoqda, /ready kutilmoqda..."
   for i in $(seq 1 $(( READY_TIMEOUT / 3 ))); do
-    if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/ready"; then return 0; fi
+    if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/ready" 2>/dev/null; then return 0; fi
     health="$(curl -fsS --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
     case "$health" in *'"modelStatus":"failed"'*) break ;; esac
+    # Crash loop, usually out of memory: do not wait the full timeout.
+    cid="$(compose ps -q api 2>/dev/null || true)"
+    restarts="$(docker inspect -f '{{.RestartCount}}' "$cid" 2>/dev/null || echo 0)"
+    [ "${restarts:-0}" -lt 2 ] || break
     sleep 3
   done
   compose logs --tail 40 api || true
@@ -159,6 +196,11 @@ report() {
     *'"device":"cuda'*) ;;
     *) [ "$OVERLAY" = cpu ] || warn "GPU kutilgan edi, lekin model CPU'da ishlayapti: $health" ;;
   esac
+  local running service
+  running="$(compose ps --status running --services 2>/dev/null || true)"
+  for service in prometheus grafana; do
+    case "$running" in *"$service"*) ;; *) warn "$service ishlamayapti: ./start.sh logs yoki docker compose logs $service" ;; esac
+  done
   echo
   info "Tayyor. Qurilma: $HW"
   echo "    Dashboard + prompt tahriri: http://127.0.0.1:$PORT/"
@@ -180,9 +222,13 @@ esac
 detect_hardware
 info "Aniqlangan qurilma: $HW (torch $TORCH_VERSION, $TORCH_INDEX)"
 check_memory
+check_ports
 write_env
-info "Image qurilmoqda (birinchi marta 10+ daqiqa)..."
-compose build api
+info "Image qurilmoqda (birinchi marta 10-40 daqiqa, internetga bog'liq)..."
+if ! compose build api; then
+  docker image inspect "hr_ai:$ACCEL" >/dev/null 2>&1 || die "Image qurilmadi: internetni tekshirib qayta urinib ko'ring."
+  warn "Image yangilanmadi (internet?), mavjud image ishlatiladi."
+fi
 gpu_preflight
 info "Model tekshirilmoqda (kerak bo'lsa Hugging Face'dan yuklanadi)..."
 compose run --rm --no-deps model-init

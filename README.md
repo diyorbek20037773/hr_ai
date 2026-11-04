@@ -51,9 +51,31 @@ downloaded** (`local_files_only=True`).
 
 Device selection (`MODEL_DEVICE=auto`, `MODEL_QUANTIZATION=auto`): GPU in bf16 if ≥ 9 GB VRAM is free; on a smaller
 GPU a 4-bit (bitsandbytes NF4) model fully on the GPU; without CUDA the CPU (slow; float32 needs ~16 GB RAM).
-On the dev laptop (RTX 3050, 6 GB) that is 4-bit on the GPU: load ~12 s, ~5 s per query.
+On the dev laptop (RTX 3050, 6 GB) that is 4-bit on the GPU: about 3.3 s per query (p50).
 
-## Install
+## Quick start with Docker (any computer)
+
+Needs Docker with Compose 2.24+, plus about 30 GB of free disk on the first run (image ~12 GB, model ~8 GB).
+
+```bash
+./start.sh          # Linux, macOS
+start.bat           # Windows: double-click, or .\start.ps1 in PowerShell
+```
+
+The script detects the hardware, builds the image with the matching torch, downloads the model once from Hugging
+Face (pinned revision, resumable), checks that the container really sees the GPU, then starts everything and opens
+the dashboard. Later runs reuse the image and the model.
+
+| Page | URL |
+|---|---|
+| Dashboard: query test, prompt viewer/editor | http://127.0.0.1:8001/ |
+| Monitoring (Grafana) | http://127.0.0.1:3001/ |
+| Swagger | http://127.0.0.1:8001/docs |
+
+Other commands: `stop`, `status`, `logs`; `--cpu` (`-Cpu`) forces CPU; `--download-model` (`-DownloadModel`) ignores a
+local `./model`. Details and the hardware table: [docs/operations.md](docs/operations.md#docker).
+
+## Install (without Docker)
 
 ```powershell
 cd D:\myprojects\hr_ai

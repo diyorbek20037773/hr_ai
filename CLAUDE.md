@@ -108,6 +108,9 @@ hr_ai/
 │                        model-eval.md, environment.md
 ├── examples/            frontend-integration.ts
 ├── logs/                gitignored
+├── docker/              compose.nvidia.yml, compose.amd.yml, compose.cpu.yml (hardware overlays)
+├── Dockerfile  docker-compose.yml  .dockerignore
+├── start.sh  start.ps1  start.bat   one-command Docker start (hardware detection)
 ├── .env.example  .gitignore  pyproject.toml  requirements.txt  run.ps1  README.md  CLAUDE.md
 ```
 
@@ -127,6 +130,9 @@ python -m app.scripts.test_model "Oliy ma'lumotli 30 yoshdan katta ayollar"
 .\scripts\monitor.ps1                       # poll /health + /metrics
 .\scripts\smoke_test.ps1                    # end-to-end against the running server
 python -m app.scripts.load_test             # latency p50/p95 against the running server
+
+.\start.ps1                                 # Docker: detect GPU, build, fetch model, start API + dashboards
+.\start.ps1 stop                            # also: status, logs (./start.sh on Linux/macOS)
 ```
 
 ## 6. Team workflow (subagents in `.claude/agents/`)
@@ -151,7 +157,7 @@ or the dev's tests.
 - Golden eval set: `tests/eval/golden_queries.jsonl` (≥ 20 queries: uz-Latin, uz-Cyrillic, Russian,
   typos, "no filter" negatives). `python -m app.scripts.eval_model` writes `docs/model-eval.md`.
 - Challenge set: `tests/eval/golden_hard.jsonl` — reported separately, no pass/fail target. It was used while
-  developing prompt v4–v9 and the intent guards, so its score is optimistic; a fresh held-out set is needed to
+  developing prompt v4–v11 and the intent guards, so its score is optimistic; a fresh held-out set is needed to
   measure generalisation.
 - Targets: the 10 core scenarios in `docs/model-eval.md` must all pass on their core fields; overall
   ≥ 85 %. Prompt changes require re-running eval before commit.
@@ -177,6 +183,7 @@ or the dev's tests.
 | `/search` refuses IDs from the local placeholder JSON | `ALLOW_LOCAL_REFERENCES_FOR_SEARCH` | config |
 | Real reference data carries Latin/Cyrillic/Russian spellings as aliases (dev JSON also has English spellings such as "Samarkand") | `references/`, resolver | add aliases or confirm with the HR team |
 | Prompt can be edited at runtime from the test page (memory only, version `+custom`, not evaluated) | `PROMPT_EDITING_ENABLED` | set `false` in production |
+| Docker: only the one-shot `model-init` container may reach Hugging Face (pinned revision, Docker volume, never `model/`); `api` stays offline | `app/scripts/fetch_model.py`, `docker-compose.yml` | none |
 | 6 GB dev GPU → 4-bit bitsandbytes model (`MODEL_QUANTIZATION=auto`) | `llm_service.py`, `docs/architecture.md` #6 | config |
 | Reference collections keys: `regions, districts, sexes, nations, languages, educations, specialists, eduTypes, degrees, academicDegrees, academicTitles, institutions, institutionTypes, institutionGroups, positionCategories, languageCertificates` | `app/models/references.py` | one mapping table |
 

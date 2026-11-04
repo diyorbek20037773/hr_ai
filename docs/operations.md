@@ -2,7 +2,45 @@
 
 All commands from `D:\myprojects\hr_ai` in PowerShell.
 
-## Run / stop
+## Docker
+
+`./start.sh` (Linux, macOS) and `start.bat` / `.\start.ps1` (Windows) are the only entry points. They write
+`.env.docker` (generated, gitignored), then run `docker compose --env-file .env.docker -f docker-compose.yml
+-f docker/compose.<overlay>.yml`.
+
+| Host | Overlay | torch | Model runs as |
+|---|---|---|---|
+| NVIDIA, driver CUDA ≥ 12.8 | `nvidia` | 2.11.0 cu128 | GPU; 4-bit below 9 GB free VRAM, else bf16 |
+| NVIDIA, driver CUDA 12.6–12.7 | `nvidia` | 2.11.0 cu126 | same |
+| NVIDIA, driver CUDA 11.8–12.5 | `nvidia` | 2.7.1 cu118 | same (not tested on real hardware) |
+| NVIDIA with under 4.5 GB VRAM | `nvidia` | as above | GPU+CPU offload, no bitsandbytes; slower, needs RAM |
+| AMD on Linux (`/dev/kfd`) | `amd` | 2.10.0 rocm7.0 | GPU, bf16; GPU+CPU offload below 9 GB free VRAM (not tested on real hardware) |
+| AMD or Intel on Windows, Apple Silicon, no GPU | `cpu` | 2.11.0 cpu | CPU, bf16, needs 10 GB RAM for Docker; 6.6 min per query measured on an 8-core laptop |
+
+Docker cannot pass AMD or Intel GPUs to containers on Windows, nor Apple GPUs on macOS, so those machines use the CPU.
+With a GPU the script fails rather than silently falling back: it runs `torch.cuda.is_available()` in a container
+before the model download. `--cpu` overrides this.
+
+Flow: port and memory checks → build image → GPU check → `model-init` (one-shot, downloads to the `hr_ai_models`
+volume) → `api`, `prometheus`, `grafana`. The model revision is pinned in `app/scripts/fetch_model.py`; a private
+mirror can be set with `HF_MODEL_REPO` / `HF_MODEL_REVISION` and `HF_TOKEN`.
+
+- **Offline rule:** only `model-init` reaches the Hub. `api` runs with `HF_HUB_OFFLINE=1`, a read-only model mount and
+  `local_files_only=True`. After the first start the stack works without internet.
+- **`./model` present:** it is mounted read-only and never downloaded over. If it is incomplete, `model-init` stops and
+  lists the missing files.
+- **Ports:** published on 127.0.0.1 only. Change them with `HR_AI_PORT` / `HR_AI_GRAFANA_PORT`, or on Windows with
+  `start.bat -Port 8011 -GrafanaPort 3011`.
+- **Shell variables, not `.env`:** `HF_TOKEN`, `HF_MODEL_REPO`, `HF_MODEL_REVISION`, `HR_AI_PORT`,
+  `HR_AI_GRAFANA_PORT` are read from the shell environment. `start.*` sets `MODEL_*` and `LLM_TIMEOUT_SECONDS`.
+- **Secrets:** an optional `.env` is passed to `api` (HR API URL, keys). `.env` is never copied into the image. A
+  service on this machine is reachable as `host.docker.internal`, not `localhost`.
+- **First-run time:** the image is ~12 GB unpacked; on a slow line the build took about an hour here.
+- **After the first start** no internet is needed: if the image build cannot reach the network, the existing image is
+  used.
+- **Prompt edits** on the dashboard stay in memory, so `./start.sh stop` or a container restart resets them.
+
+## Run / stop (without Docker)
 
 ```powershell
 .\run.ps1                 # foreground (Ctrl+C to stop)
@@ -22,6 +60,8 @@ in a background thread (~12 s on the dev GPU with 4-bit, longer from a cold disk
 
 Line format: `UP|STARTING|DOWN model=<bool> status=<loading|loaded|failed> device=… ready=<code> llm_p95<=<s>
 queue=<n> gpuMB=<n> uptime=<s>`. Exits 1 after `-MaxFailures` (3) consecutive failures.
+
+With the Docker stack, Grafana is already on port 3001: do not start `ops/` next to it.
 
 Optional: `.\scripts\watchdog.ps1` restarts the server via `run.ps1 -Stop/-Background` after 3 failed `/health`
 checks and waits for `/ready` (log: `logs\watchdog.log`). Optional Prometheus + Grafana:
@@ -108,26 +148,7 @@ access logs are disabled (the middleware logs method/route/status/duration only)
 
 ## Last verified run
 
-2026-09-30 (prompt v10, intent guards, CUDA cache release), dev laptop RTX 3050 6 GB, 4-bit, on AC power,
-Windows power plan "Balanced". `.un.ps1 -Background` → PID 24296 on http://127.0.0.1:8001.
-
-- `/ready` 200 about 33 s after start. `/health`: `device=cuda`, `dtype=bfloat16+4bit`, `loadSeconds=23.9`,
-  `promptVersion=10`. `logs\server.out.log` contains exactly **1** `Model loaded` line. One uvicorn worker.
-- Smoke: `.\scripts\smoke_test.ps1` → **SMOKE: 12/12 passed** (health, ready, the 10 core queries; 3.1–12.1 s each).
-- Monitor, run in parallel with the load test: `.\scripts\monitor.ps1 -IntervalSeconds 5 -DurationSeconds 150` →
-  **31 checks, all `UP`, 0 failures**. GPU memory stayed at 2.7–3.0 GB, with no growth thanks to the cache release
-  (architecture decision 9).
-- Load test: 0 errors (see below).
-- `/metrics` after the load test:
-  - `hr_ai_llm_requests_total{status="ok"} 45`, `json_error 0`
-  - `hr_ai_intent_corrections_total{kind="canonical:typeOfPosition"} 8`, `{kind="drop:education"} 1`
-- Privacy: INFO+ records containing query words = 0.
-
-Latency note: this run is ~2 s per call slower than the morning runs of the same day. An A/B check with the *same*
-committed v3 prompt gave the same ~8.2 s, so the change is environmental, not the prompt. `nvidia-smi` during
-generation showed the GPU in P5 at 500–750 MHz, ~20–30 % utilisation, throttle reason "idle". In other words, the
-GPU is starved by the CPU side under the Balanced power plan. For stable latency on a laptop, use the
-"High performance" / "Best performance" power mode and keep it plugged in.
+_Filled in below._
 
 ## Last load test
 

@@ -1,0 +1,11 @@
+# NVIDIA GPU. Needs the NVIDIA driver on the host; Linux also needs nvidia-container-toolkit
+# (Docker Desktop on Windows has it built in).
+services:
+  api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,0 +1,8 @@
+# Scrapes the API inside the compose network (the standalone ops/prometheus.yml targets a host-run API).
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: hr_ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8001"]

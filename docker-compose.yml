@@ -1,0 +1,97 @@
+# hr_ai stack. Start it with ./start.sh (Linux/macOS) or start.bat (Windows): they detect the hardware, write
+# .env.docker and add the matching docker/compose.<accelerator>.yml. Everything is published on 127.0.0.1 only.
+name: hr_ai
+
+x-app: &app
+  image: hr_ai:${HR_AI_ACCEL:-cpu}
+  build:
+    context: .
+    args:
+      TORCH_INDEX: ${TORCH_INDEX:-cpu}
+      TORCH_VERSION: ${TORCH_VERSION:-2.11.0}
+      INSTALL_BNB: ${INSTALL_BNB:-0}
+
+services:
+  # One-shot: fills /models from Hugging Face, at the revision pinned in app/scripts/fetch_model.py.
+  model-init:
+    <<: *app
+    command: ["python", "-m", "app.scripts.fetch_model"]
+    restart: "no"
+    environment:
+      MODEL_PATH: /models
+      HR_AI_MODEL_READONLY: ${HR_AI_MODEL_READONLY:-0}
+      HF_MODEL_REPO: ${HF_MODEL_REPO:-}
+      HF_MODEL_REVISION: ${HF_MODEL_REVISION:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /models/.cache/huggingface
+    volumes:
+      - ${HR_AI_MODEL_SOURCE:-hr_ai_models}:/models:${HR_AI_MODEL_MODE:-rw}
+
+  api:
+    <<: *app
+    restart: unless-stopped
+    depends_on:
+      model-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    extra_hosts:
+      # Lets HR_SEARCH_API_URL / REFERENCE_API_BASE_URL reach a service on this machine, also on Linux.
+      - host.docker.internal:host-gateway
+    environment:
+      MODEL_PATH: /models
+      MODEL_DEVICE: ${MODEL_DEVICE:-auto}
+      MODEL_DTYPE: ${MODEL_DTYPE:-auto}
+      MODEL_QUANTIZATION: ${MODEL_QUANTIZATION:-auto}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      LOG_DIR: /app/logs
+      # The API must never reach the Hub: weights come only from the mounted directory.
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    ports:
+      - 127.0.0.1:${HR_AI_PORT:-8001}:8001
+    volumes:
+      - ${HR_AI_MODEL_SOURCE:-hr_ai_models}:/models:ro
+      - hr_ai_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8001/ready', timeout=4)"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 300s
+
+  prometheus:
+    image: prom/prometheus:${HR_AI_PROMETHEUS_TAG:-v3.15.1}
+    restart: unless-stopped
+    depends_on:
+      - api
+    volumes:
+      - ./ops/prometheus.docker.yml:/etc/prometheus/prometheus.yml:ro,z
+      - hr_ai_prometheus:/prometheus
+
+  grafana:
+    image: grafana/grafana:${HR_AI_GRAFANA_TAG:-13.3.0}
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      # View-only dashboards with no login, reachable from this machine only.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hr_ai.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - 127.0.0.1:${HR_AI_GRAFANA_PORT:-3001}:3000
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+      - hr_ai_grafana:/var/lib/grafana
+
+volumes:
+  hr_ai_models:
+  hr_ai_logs:
+  hr_ai_prometheus:
+  hr_ai_grafana:

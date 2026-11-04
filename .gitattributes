@@ -1,3 +1,5 @@
 # Keep LF in the repository and working tree (Python write_text on Windows would otherwise add CRLF churn)
 * text=auto eol=lf
 *.safetensors binary
+# cmd.exe needs CRLF
+*.bat text eol=crlf

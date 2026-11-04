@@ -32,7 +32,7 @@ Liveness — always 200 while the process runs.
 
 ```json
 { "status": "ok", "modelLoaded": true, "modelStatus": "loaded", "modelPath": "D:\\myprojects\\hr_ai\\model",
-  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "8", "uptimeSeconds": 431.2 }
+  "device": "cuda", "dtype": "bfloat16+4bit", "loadSeconds": 12.0, "promptVersion": "11", "uptimeSeconds": 431.2 }
 ```
 
 `modelStatus`: `loading | loaded | failed | not_loaded`.
@@ -54,7 +54,7 @@ Response:
 ```json
 { "query": "Oliy ma'lumotli, 30 yoshdan katta ayollar",
   "intent": { "education": "Oliy", "fromAge": 30, "sex": "Ayol" },
-  "promptVersion": "8", "latencyMs": 5210 }
+  "promptVersion": "11", "latencyMs": 5210 }
 ```
 
 `intent` is the model output after deterministic guards (age direction fixed from the query wording; ages, years,
@@ -91,7 +91,7 @@ Response:
 {
   "query": "…",
   "intent": { "district": "Chilonzor", "language": "Ingliz tili", "languageCertificate": "IELTS", "toAge": 35 },
-  "promptVersion": "8",
+  "promptVersion": "11",
   "latencyMs": 5873,
   "referenceSources": { "districts": "request", "languages": "local", "languageCertificates": "local" },
   "searchModel": { "districtId": 102, "languageId": 3, "toAge": 35, "academicTitleId": 0,

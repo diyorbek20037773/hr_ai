@@ -1,0 +1,2 @@
+# CPU only: no device access is added.
+services: {}

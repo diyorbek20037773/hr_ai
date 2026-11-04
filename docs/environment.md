@@ -12,7 +12,7 @@ Recorded 2026-09-30 on the development machine.
 | GPU | NVIDIA GeForce RTX 3050 Laptop, **6 GB VRAM** (~5.0 GB free), driver 576.52, CUDA 12.9 |
 | Disk D: | 233 GB, 63 GB free |
 | git | 2.53.0.windows.1 (repo initialised in this session, branch `main`, no remote) |
-| Docker | 29.7.2 installed (optional monitoring stack only; not required) |
+| Docker | 29.7.2 installed (the Docker stack: `start.ps1`; Docker Desktop's VM has 7.6 GB RAM here, enough for the GPU path) |
 
 ## Python / venv
 

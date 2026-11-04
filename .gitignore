@@ -13,6 +13,7 @@ __pycache__/
 /logs/
 *.log
 /.env
+/.env.docker
 
 # Editors / OS
 .vscode/
