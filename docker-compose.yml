@@ -22,7 +22,7 @@ services:
       HR_AI_MODEL_READONLY: ${HR_AI_MODEL_READONLY:-0}
       HF_MODEL_REPO: ${HF_MODEL_REPO:-}
       HF_MODEL_REVISION: ${HF_MODEL_REVISION:-}
-      HF_ENDPOINT: ${HF_ENDPOINT:-}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
       HF_TOKEN: ${HF_TOKEN:-}
       HF_HOME: /models/.cache/huggingface
     volumes:
