@@ -77,6 +77,15 @@ _PAGE = """<!doctype html>
     <div class="row" id="examples"></div>
   </div>
 
+  <div class="card" id="out" hidden>
+    <div class="muted" id="meta"></div>
+    <h2>Aniqlangan filtrlar</h2><div id="chips"></div>
+    <div id="unres"></div>
+    <div id="warns"></div>
+    <h2>searchModel (mavjud HR Search API'ga yuboriladi)</h2><pre id="sm"></pre>
+    <details><summary class="muted">To'liq javob (JSON)</summary><pre id="raw"></pre></details>
+  </div>
+
   <div class="card" id="promptPanel" hidden>
     <div class="head">
       <div><strong>Qwen'ga beriladigan prompt</strong> <span id="pVersion" class="badge"></span>
@@ -111,14 +120,6 @@ _PAGE = """<!doctype html>
     </div>
   </div>
 
-  <div class="card" id="out" hidden>
-    <div class="muted" id="meta"></div>
-    <h2>Aniqlangan filtrlar</h2><div id="chips"></div>
-    <div id="unres"></div>
-    <div id="warns"></div>
-    <h2>searchModel (mavjud HR Search API'ga yuboriladi)</h2><pre id="sm"></pre>
-    <details><summary class="muted">To'liq javob (JSON)</summary><pre id="raw"></pre></details>
-  </div>
 
   <p class="muted" style="margin-top:18px">
     <a href="/docs">Swagger /docs</a> · <a href="/health">/health</a> · <a href="/ready">/ready</a> ·
@@ -159,6 +160,11 @@ async function run() {
   const query = $("q").value.trim();
   if (!query) return;
   $("go").disabled = true; $("go").textContent = "Kutilmoqda…";
+  $("out").hidden = false;
+  $("meta").textContent = "Model javob yozmoqda… odatda 3–10 soniya, CPU'da bir necha daqiqa.";
+  for (const id of ["chips", "unres", "warns"]) $(id).innerHTML = "";
+  $("sm").textContent = ""; $("raw").textContent = "";
+  $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
   const t0 = performance.now();
   try {
     const res = await fetch("/api/v1/ai-search/resolve", {
@@ -191,9 +197,11 @@ async function run() {
     $("sm").textContent = JSON.stringify(data.searchModel, null, 2);
   } catch (e) {
     $("out").hidden = false;
+    $("meta").textContent = "";
     $("chips").innerHTML = `<span class="chip bad">Server bilan aloqa yo'q: ${esc(e.message)}</span>`;
   } finally {
     $("go").disabled = false; $("go").textContent = "Qidirish";
+    $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
   }
 }
 $("go").onclick = run;

@@ -326,11 +326,16 @@ def test_editing_disabled(make_app):
 
 # ---------------------------------------------------------------- render
 
+def _compact_json(answer):
+    """Few-shot answers go into the chat as compact JSON (fewer tokens; the model imitates the format)."""
+    return json.dumps(answer, ensure_ascii=False, separators=(",", ":"))
+
+
 def _expected_messages(system, shots, query):
     msgs = [{"role": "system", "content": system}]
     for q, a in shots:
         msgs.append({"role": "user", "content": q})
-        msgs.append({"role": "assistant", "content": json.dumps(a, ensure_ascii=False)})
+        msgs.append({"role": "assistant", "content": _compact_json(a)})
     msgs.append({"role": "user", "content": query})
     return msgs
 
@@ -360,6 +365,33 @@ def test_render_custom_non_ascii_not_escaped(make_app):
     assert b["version"] == CUSTOM_VERSION and b["isCustom"] is True
     assert b["messages"] == _expected_messages(CUSTOM_SYS, [(s["query"], s["answer"]) for s in shots], "q")
     assert "\\u" not in b["messages"][2]["content"]
+    assert json.loads(b["messages"][2]["content"]) == shots[0]["answer"]
+    assert b["messages"][2]["content"] == _compact_json(shots[0]["answer"])
+
+
+def test_render_few_shot_answers_have_no_separator_whitespace(make_app):
+    app, _ = make_app()
+    shots = [{"query": "a", "answer": {"fromAge": 30, "toAge": 40, "sex": "Ayol"}}]
+    with TestClient(app) as c:
+        assert c.put(P, json=_put_body(shots=shots)).status_code == 200, "setup"
+        b = c.post(f"{P}/render", json={"query": "q"}).json()
+    content = b["messages"][2]["content"]
+    assert b["messages"][2]["role"] == "assistant"
+    assert " " not in content, content
+    assert json.loads(content) == shots[0]["answer"]
+
+
+def test_build_messages_default_few_shots_compact():
+    answers = [m["content"] for m in build_messages("q") if m["role"] == "assistant"]
+    assert len(answers) == len(FEW_SHOTS) > 0
+    assert answers == [_compact_json(a) for _, a in FEW_SHOTS]
+
+
+def test_build_retry_messages_few_shots_compact():
+    # the failed raw output is echoed verbatim; only the few-shots are serialised by the prompt code
+    store.set_custom(CUSTOM_SYS, [("shot q", {"fromAge": 30, "sex": "Ayol"})])
+    msgs = build_retry_messages("q", "not json")
+    assert {"role": "assistant", "content": '{"fromAge":30,"sex":"Ayol"}'} in msgs
 
 
 def test_render_default_query_when_omitted(make_app):
@@ -385,6 +417,18 @@ def test_ui_page_has_prompt_controls(make_app):
     assert not re.search(r"""<script[^>]+src=["']https?://""", html, re.I)
     assert not re.search(r"""<link[^>]+href=["']https?://""", html, re.I)
     assert not re.search(r"""@import\s+(url\()?["']?https?://""", html, re.I)
+
+
+def test_ui_result_card_comes_before_prompt_panel(make_app):
+    """A result rendered below an open prompt panel looked like "no answer"."""
+    app, _ = make_app()
+    with TestClient(app) as c:
+        html = c.get("/").text
+    out = list(re.finditer(r"""<[a-zA-Z][^<>]*\sid=["']out["']""", html))
+    panel = list(re.finditer(r"""<[a-zA-Z][^<>]*\sid=["']promptPanel["']""", html))
+    assert len(out) == 1, [m.group(0) for m in out]
+    assert len(panel) == 1, [m.group(0) for m in panel]
+    assert out[0].start() < panel[0].start()
 
 
 # ---------------------------------------------------------------- privacy

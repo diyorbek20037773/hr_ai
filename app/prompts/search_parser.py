@@ -7,69 +7,55 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "10"
+PROMPT_VERSION = "11"
 
-SYSTEM_PROMPT = """You are a search-query parser for an HR personnel advanced-search system.
-Convert the user's request (Uzbek Latin, Uzbek Cyrillic or Russian) into ONE JSON object using only these keys:
+SYSTEM_PROMPT = """Extract HR search filters from the user's text (Uzbek Latin, Uzbek Cyrillic or Russian) into one
+JSON object. Output JSON only. Include only what is explicitly stated; if nothing is, output {}. Never output IDs.
 
-{"region":str,"birthRegion":str,"district":str,"sex":"Erkak|Ayol","nation":str,"language":str,
-"languageCertificate":str,"education":str,"eduType":str,"degree":str,"academicDegree":str,"academicTitle":str,
-"specialists":[str],"institution":str,"institutionTypes":[str],"positionCategories":[str],
-"typeOfPosition":["Leader|Management|Technic|Expert|ProductionEmployee|ServiceEmployee"],
-"institutionGroups":[str],"institutionName":str,"institutionInn":int,"dateOfReceipt":"YYYY-MM-DD",
-"typeOfService":"CivilServant|NotCivilServant","fromAge":int,"toAge":int,"fromYear":int,"toYear":int,
-"experienceYear":int,"firstName":str,"lastName":str,"middleName":str,"pinfl":str,"inn":int,
-"isAwarded":bool,"isReserved":bool,"isAcademicDegree":bool,"isAcademicTitle":bool,"isGlobalEducation":bool,
-"term":str}
+Keys:
+strings: region, birthRegion, district, nation, language, languageCertificate, education, eduType, degree,
+academicDegree, academicTitle, institution, institutionName, firstName, lastName, middleName, pinfl, term, sex,
+typeOfService, dateOfReceipt (YYYY-MM-DD)
+lists: specialists, institutionTypes, institutionGroups, positionCategories, typeOfPosition
+integers: fromAge, toAge, fromYear, toYear, experienceYear, inn, institutionInn
+true: isAwarded, isReserved, isAcademicDegree, isAcademicTitle, isGlobalEducation
 
-Rules:
-- Include ONLY criteria the user explicitly stated; omit other keys. Never guess, add defaults, or infer one field
-  from another. No concrete criterion -> {}. Never output IDs - only names.
-- Places, languages, specialities: Uzbek Latin base form, no suffixes (Toshkentda -> "Toshkent",
-  ingliz tilini -> "Ingliz tili"). A profession becomes its field: iqtisodchi/экономист -> "Iqtisodiyot".
-- Place where people live/work -> region/district; place of birth (tug'ilgan, туғилган, родившиеся) -> birthRegion.
-- sex: "Erkak" | "Ayol". education: "Oliy" (олий, высшее), "O'rta maxsus", "O'rta".
-- MINIMUM age -> fromAge: "30 yoshdan katta", "30 ёшдан катта", "старше 30".
-- MAXIMUM age -> toAge: "40 yoshgacha", "40 ёшгача", "до 40 лет", "моложе 40", "не старше 40".
-- Range "25-40 yosh", "от 25 до 40" -> fromAge 25, toAge 40. Birth years -> fromYear/toYear.
-- Experience: "kamida 5 yil", "5 yildan ortiq staj", "стаж от 5 лет" -> experienceYear 5.
-- typeOfPosition: rahbar/boshliq/direktor/руководитель/начальник -> "Leader"; boshqaruv xodimi/menejer -> "Management";
-  texnik -> "Technic"; mutaxassis(lar)/ekspert/специалист -> "Expert";
-  ishlab chiqarish xodimi -> "ProductionEmployee"; xizmat ko'rsatuvchi xodim -> "ServiceEmployee".
-  Only these names, each once (boshliq+direktor -> ["Leader"]).
-- typeOfService: davlat xizmatchisi/госслужащий -> "CivilServant"; davlat xizmatchisi bo'lmagan -> "NotCivilServant".
-- Organisation kind (vazirlik, qo'mita, agentlik, hokimlik/хокимият, bank) -> institutionTypes, singular Uzbek Latin
-  ("Vazirlik", "Hokimlik"). institutionGroups only for "respublika/hududiy tashkilotlar".
-- academicTitle: dotsent/доцент -> "Dotsent", professor -> "Professor". academicDegree: fan nomzodi/кандидат наук ->
-  "Fan nomzodi", fan doktori/доктор наук -> "Fan doktori", "PhD", "DSc".
-- Booleans: mukofotlangan/награждённый -> isAwarded; zaxirada -> isReserved;
-  ilmiy darajasi bor -> isAcademicDegree; ilmiy unvoni bor -> isAcademicTitle; xorijda o'qigan -> isGlobalEducation.
-- Person names: copy exactly as written, same alphabet, never transliterate.
-- term: only for a concrete topic that fits no other key (e.g. "blokcheyn"), never for adjectives or xodim/kadr.
-- Output JSON only, no text or markdown."""
+Values:
+- Places, languages, specialities: Uzbek Latin base form (Toshkentda -> Toshkent, ingliz tilini -> Ingliz tili).
+  A profession becomes its field (iqtisodchi, экономист -> Iqtisodiyot).
+- district: a tuman/район. region: a viloyat/область or a city.
+- sex: Erkak or Ayol. education: Oliy, O'rta maxsus or O'rta.
+- typeOfPosition: Leader (rahbar, boshliq, direktor, руководитель, начальник), Management (boshqaruv xodimi, menejer),
+  Technic (texnik), Expert (mutaxassis, ekspert, специалист), ProductionEmployee (ishlab chiqarish xodimi,
+  производственный персонал), ServiceEmployee (xizmat ko'rsatuvchi xodim, обслуживающий персонал). Each once.
+- typeOfService: CivilServant (davlat xizmatchisi, давлат хизматчиси, госслужащий) or NotCivilServant (davlat
+  xizmatchisi bo'lmagan, не госслужащий).
+- institutionTypes: organisation kind in singular (Vazirlik, Qo'mita, Agentlik, Hokimlik, Bank).
+- academicTitle: Dotsent, Professor. academicDegree: Fan nomzodi, Fan doktori, PhD, DSc.
+- Flags: ilmiy darajasi bor -> isAcademicDegree; ilmiy unvoni bor -> isAcademicTitle; mukofotlangan -> isAwarded;
+  zaxirada -> isReserved; xorijda o'qigan -> isGlobalEducation.
+- fromAge is a minimum (yoshdan katta, старше); toAge is a maximum (yoshgacha, до, моложе, не старше).
+  Birth years: fromYear, toYear. Birth place: birthRegion.
+- Copy person names exactly: Latin stays Latin, Cyrillic stays Cyrillic.
+- term: only a concrete topic that fits no other key."""
 
 FEW_SHOTS: list[tuple[str, dict]] = [
-    ("Buxoro viloyatida yashovchi 45 yoshgacha erkaklar",
-     {"region": "Buxoro viloyati", "toAge": 45, "sex": "Erkak"}),
     ("Юнусобод туманида ишлайдиган, камида 7 йил стажи бор ўрта махсус маълумотли техниклар",
      {"district": "Yunusobod", "experienceYear": 7, "education": "O'rta maxsus", "typeOfPosition": ["Technic"]}),
-    ("kamida 10 yil ish stajiga ega texnik xodimlar va mutaxassislar",
-     {"experienceYear": 10, "typeOfPosition": ["Technic", "Expert"]}),
-    ("Исми Дилноза, отасининг исми Рустамовна",
-     {"firstName": "Дилноза", "middleName": "Рустамовна"}),
-    ("Ilmiy unvoni bor, zaxirada turgan, nemis tilini biladigan xodimlar",
-     {"isAcademicTitle": True, "isReserved": True, "language": "Nemis tili"}),
-    ("Руководители с фамилией Смирнов и сертификатом TOEFL",
-     {"typeOfPosition": ["Leader"], "lastName": "Смирнов", "languageCertificate": "TOEFL"}),
-    ("Buxoroda tug'ilgan, Navoiyda ishlaydigan xodimlar",
-     {"birthRegion": "Buxoro", "region": "Navoiy"}),
-    ("1985-1995 yillarda tug'ilgan dasturchilar",
-     {"fromYear": 1985, "toYear": 1995, "specialists": ["Axborot texnologiyalari"]}),
-    ("Xorijda o'qigan, fan nomzodi darajasiga ega xodimlar",
-     {"isGlobalEducation": True, "academicDegree": "Fan nomzodi"}),
     ("Врачи из Ферганы старше 40 лет, профессора, госслужащие, работающие в агентствах",
      {"specialists": ["Tibbiyot"], "region": "Farg'ona", "fromAge": 40, "academicTitle": "Professor",
       "typeOfService": "CivilServant", "institutionTypes": ["Agentlik"]}),
+    ("Исми Дилноза, отасининг исми Рустамовна",
+     {"firstName": "Дилноза", "middleName": "Рустамовна"}),
+    ("Usmonova Nodira Bahodirovna",
+     {"lastName": "Usmonova", "firstName": "Nodira", "middleName": "Bahodirovna"}),
+    ("Ilmiy unvoni bor, zaxirada turgan, nemis tilini biladigan xodimlar",
+     {"isAcademicTitle": True, "isReserved": True, "language": "Nemis tili"}),
+    ("Buxoroda tug'ilgan, Navoiyda ishlaydigan 1985-1995 yillarda tug'ilgan dasturchilar",
+     {"birthRegion": "Buxoro", "region": "Navoiy", "fromYear": 1985, "toYear": 1995,
+      "specialists": ["Axborot texnologiyalari"]}),
+    ("Bank rahbarlari orasidan davlat xizmatchisi bo'lmaganlar",
+     {"institutionTypes": ["Bank"], "typeOfPosition": ["Leader"], "typeOfService": "NotCivilServant"}),
     ("Менга ажойиб жамоа керак", {}),
 ]
 
@@ -85,7 +71,7 @@ def build_messages(query: str, cfg=None) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [{"role": "system", "content": cfg.system_prompt}]
     for user, answer in cfg.few_shots:
         messages.append({"role": "user", "content": user})
-        messages.append({"role": "assistant", "content": json.dumps(answer, ensure_ascii=False)})
+        messages.append({"role": "assistant", "content": json.dumps(answer, ensure_ascii=False, separators=(",", ":"))})
     messages.append({"role": "user", "content": query})
     return messages
 

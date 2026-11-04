@@ -2,7 +2,7 @@
 
 The 4B model occasionally puts an age on the wrong side ("30 ёшдан катта" -> toAge 30). When the query contains an
 unambiguous direction phrase for a number and the model assigned that exact number to the opposite field, the value
-is moved to the right field. Guards never add a value the model did not extract and never touch other fields.
+is moved to the right field. Guards never invent a filter: they move, normalise or remove what the model extracted.
 """
 
 from __future__ import annotations
@@ -50,7 +50,18 @@ def fix_age_direction(query: str, intent: ParsedSearchIntent) -> tuple[ParsedSea
     only_min, only_max = mins - maxs, maxs - mins
     data = intent.model_dump()
     fixes: list[str] = []
-    if data.get("toAge") in only_min and data.get("fromAge") is None:
+    if data.get("fromAge") is not None and data.get("fromAge") == data.get("toAge"):
+        # "45 ёшгача" written to both fields: keep the side the phrase states. A number written twice
+        # ("от 45 до 45 лет") is a real exact-age request and stays.
+        if re.findall(r"\d+", text).count(str(data["toAge"])) > 1:
+            pass
+        elif data["toAge"] in only_max:
+            data["fromAge"] = None
+            fixes.append("drop:fromAge")
+        elif data["toAge"] in only_min:
+            data["toAge"] = None
+            fixes.append("drop:toAge")
+    elif data.get("toAge") in only_min and data.get("fromAge") is None:
         data["fromAge"], data["toAge"] = data["toAge"], None
         fixes.append("toAge->fromAge")
     elif data.get("fromAge") in only_max and data.get("toAge") is None:
@@ -64,7 +75,8 @@ def fix_age_direction(query: str, intent: ParsedSearchIntent) -> tuple[ParsedSea
 _NUMERIC_FIELDS = ("fromAge", "toAge", "fromYear", "toYear", "experienceYear")
 # stems (after normalize_text) that must appear for an `education` value to count as stated
 _EDUCATION_MARKERS = (
-    "oliy", "олий", "высш", "o'rta", "ўрта", "урта", "средн", "maxsus", "махсус", "ma'lumotli", "маълумотли",
+    "oliy", "олий", "высш", "o'rta", "orta m", "ўрта", "урта", "средн", "maxsus", "махсус", "ma'lumotli", "malumotli",
+    "маълумотли",
     "образован", "boshlang'ich", "бошланғич", "начальное образ", "bakalavr", "бакалавр", "magistr", "магистр",
 )
 
@@ -155,8 +167,8 @@ _POSITION_EVIDENCE: dict[TypeOfPosition, tuple[str, ...]] = {
     TypeOfPosition.Leader: ("rahbar", "raxbar", "раҳбар", "рахбар", "boshli", "бошли", "direktor", "директор",
                             "руковод", "начальн", "leader", "director"),
     TypeOfPosition.Management: ("boshqaruv", "бошқарув", "menejer", "менеджер", "менежер", "управлен", "manage"),
-    TypeOfPosition.Technic: ("texni", "техни", "technic"),
-    TypeOfPosition.Expert: ("mutaxassis", "мутахассис", "специалист", "ekspert", "эксперт", "expert"),
+    TypeOfPosition.Technic: ("texni", "tehni", "техни", "technic"),
+    TypeOfPosition.Expert: ("mutaxassis", "mutahassis", "мутахассис", "специалист", "ekspert", "эксперт", "expert"),
     TypeOfPosition.ProductionEmployee: ("ishlab chiqarish", "ишлаб чиқариш", "производств", "production"),
     TypeOfPosition.ServiceEmployee: ("xizmat ko'rsat", "хизмат кўрсат", "обслужив", "service"),
 }
@@ -183,11 +195,51 @@ def drop_unstated_positions(query: str, intent: ParsedSearchIntent) -> tuple[Par
     return intent.model_copy(update={"typeOfPosition": keep or None}), ["drop:typeOfPosition"]
 
 
+_TITLE_GENERIC = ("unvon", "унвон", "звани")
+_TITLE_ACADEMIC = ("ilmiy", "илмий", "учён", "учен", "ученое")
+_TITLE_NEGATED = ("yo'q", "йўқ", "нет", "без ", "bo'lmagan", "бўлмаган")
+_TITLE_NAMED = ("dots", "dos", "доц", "дос", "дотс", "prof", "проф", "akad", "акад", "ilmiy xodim", "илмий ходим",
+                "научн")
+
+
+def fix_generic_title(query: str, intent: ParsedSearchIntent) -> tuple[ParsedSearchIntent, list[str]]:
+    """"ilmiy unvonga ega" names no title: a concrete academicTitle is the model's guess, the user said the flag."""
+    text = normalize_text(query)
+    if not intent.academicTitle or normalize_text(intent.academicTitle) in text:
+        return intent, []
+    generic = any(w in text for w in _TITLE_GENERIC) and any(w in text for w in _TITLE_ACADEMIC)
+    if not generic or any(w in text for w in _TITLE_NEGATED) or any(w in text for w in _TITLE_NAMED):
+        return intent, []
+    fixed = intent.model_copy(update={"academicTitle": None, "isAcademicTitle": True})
+    return fixed, ["academicTitle->isAcademicTitle"]
+
+
+_NAME_FIELDS = ("firstName", "lastName", "middleName")
+_LATIN_TO_CYRILLIC = str.maketrans("AaBCcEeHKkMOoPpTXxYy", "АаВСсЕеНКкМОоРрТХхУу")
+
+
+def fix_mixed_script_names(query: str, intent: ParsedSearchIntent) -> tuple[ParsedSearchIntent, list[str]]:
+    """The tokenizer can emit Latin look-alikes inside a Cyrillic name ("Toшматов"). Restore the spelling the user
+    typed, and only when that exact word is in the query."""
+    update: dict[str, str] = {}
+    for key in _NAME_FIELDS:
+        value = getattr(intent, key)
+        has_cyrillic = bool(value) and any("Ѐ" <= c <= "ӿ" for c in value)
+        if has_cyrillic and any("a" <= c.lower() <= "z" for c in value):
+            restored = value.translate(_LATIN_TO_CYRILLIC)
+            if restored in query:
+                update[key] = restored
+    if not update:
+        return intent, []
+    return intent.model_copy(update=update), ["canonical:personName"]
+
+
 def apply_all(query: str, intent: ParsedSearchIntent) -> tuple[ParsedSearchIntent, list[str]]:
     """All guards in order; returns the corrected intent and every correction code."""
     fixes: list[str] = []
     for guard in (lambda i: fix_age_direction(query, i), lambda i: drop_unstated(query, i),
                   lambda i: drop_unstated_sex(query, i), lambda i: drop_unstated_receipt(query, i),
+                  lambda i: fix_generic_title(query, i), lambda i: fix_mixed_script_names(query, i),
                   move_position_types, canonicalize_positions, lambda i: drop_unstated_positions(query, i)):
         intent, found = guard(intent)
         fixes += found
