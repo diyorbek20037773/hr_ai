@@ -1,8 +1,9 @@
 """Docker packaging: the install-time model download and the invariants of the container files.
 
 Written from the packaging spec, not from the implementation. Nothing here loads the model, needs Docker or touches
-the network: `huggingface_hub.snapshot_download` and `time.sleep` are replaced, and the container files are parsed
-(YAML, JSON, AST, Dockerfile instructions), so a rule mentioned only in a comment does not count.
+the network: `fetch_model.list_files` and `time.sleep` are replaced, the file requests go to an `httpx.MockTransport`,
+an autouse guard fails any test that reaches a real transport, and the container files are parsed (YAML, JSON, AST,
+Dockerfile instructions), so a rule mentioned only in a comment does not count.
 """
 
 from __future__ import annotations
@@ -12,19 +13,22 @@ import fnmatch
 import inspect
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
+from collections import namedtuple
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-import huggingface_hub
+import httpx
 import pytest
 import yaml
 from prometheus_client import generate_latest
 
 import app.core.metrics  # noqa: F401 -- registers the hr_ai_* collectors that /metrics exposes
 from app.scripts import fetch_model
+from tests.unit.fetch_fakes import Hub, forbid_network, serve
 
 ROOT = Path(__file__).resolve().parents[2]
 REAL_DOWNLOAD = fetch_model.download
@@ -33,6 +37,7 @@ SHARD_1 = "model-00001-of-00002.safetensors"
 SHARD_2 = "model-00002-of-00002.safetensors"
 INDEX = "model.safetensors.index.json"
 REQUIRED = ("config.json", "tokenizer.json", "tokenizer_config.json")
+DiskUsage = namedtuple("DiskUsage", "total used free")
 
 
 def read(relative: str) -> str:
@@ -43,15 +48,18 @@ def load_yaml(relative: str) -> dict:
     return yaml.safe_load(read(relative))
 
 
+def model_files() -> dict[str, bytes]:
+    """Every file of a complete two-shard model."""
+    weight_map = {"layer.a": SHARD_1, "layer.b": SHARD_2, "layer.c": SHARD_2}
+    index = json.dumps({"metadata": {}, "weight_map": weight_map}).encode()
+    return {**dict.fromkeys(REQUIRED, b"{}"), INDEX: index, SHARD_1: b"\0", SHARD_2: b"\0"}
+
+
 def write_model(path: Path) -> Path:
     """A complete two-shard model directory."""
     path.mkdir(parents=True, exist_ok=True)
-    for name in REQUIRED:
-        (path / name).write_text("{}", encoding="utf-8")
-    weight_map = {"layer.a": SHARD_1, "layer.b": SHARD_2, "layer.c": SHARD_2}
-    (path / INDEX).write_text(json.dumps({"metadata": {}, "weight_map": weight_map}), encoding="utf-8")
-    for name in (SHARD_1, SHARD_2):
-        (path / name).write_bytes(b"\0")
+    for name, body in model_files().items():
+        (path / name).write_bytes(body)
     return path
 
 
@@ -74,22 +82,9 @@ class FakeDownload:
             self.effect(Path(bound.arguments["path"]))
 
 
-class FakeHub:
-    """Stands in for huggingface_hub.snapshot_download: raises the queued errors, then succeeds."""
-
-    def __init__(self, errors: list[BaseException] | None = None, effect: Callable[[Path], None] | None = None):
-        self.calls: list[dict] = []
-        self.errors = list(errors or [])
-        self.effect = effect
-
-    def __call__(self, *args, **kwargs) -> str:
-        assert not args, "snapshot_download must be called with keyword arguments"
-        self.calls.append(kwargs)
-        if self.errors:
-            raise self.errors.pop(0)
-        if self.effect:
-            self.effect(Path(kwargs["local_dir"]))
-        return str(kwargs["local_dir"])
+@pytest.fixture(autouse=True)
+def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    forbid_network(monkeypatch)
 
 
 @pytest.fixture
@@ -100,20 +95,22 @@ def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 
 @pytest.fixture
-def hub(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeHub]:
-    def install(errors: list[BaseException] | None = None, effect: Callable[[Path], None] | None = None) -> FakeHub:
-        fake = FakeHub(errors, effect)
-        monkeypatch.setattr(huggingface_hub, "snapshot_download", fake)
-        return fake
+def hub(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Hub]:
+    """A hub whose listing raises the queued errors first; `files` defaults to a complete model."""
+
+    def install(errors: list[BaseException] | None = None, files: dict[str, bytes] | None = None) -> Hub:
+        return serve(monkeypatch, Hub(model_files() if files is None else files, list_errors=errors or []))
 
     return install
 
 
 @pytest.fixture
 def model_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An empty MODEL_PATH with the other variables main() reads unset."""
+    """An empty MODEL_PATH with the other variables main() reads unset, on a disk with room for the model."""
     target = tmp_path / "models"
     target.mkdir()
+    free = fetch_model.MODEL_BYTES * 2
+    monkeypatch.setattr(shutil, "disk_usage", lambda _path: DiskUsage(total=free, used=0, free=free))
     monkeypatch.setenv("MODEL_PATH", str(target))
     for name in ("HF_MODEL_REPO", "HF_MODEL_REVISION", "HR_AI_MODEL_READONLY"):
         monkeypatch.delenv(name, raising=False)
@@ -128,6 +125,19 @@ def fake_download(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeDownload
         return fake
 
     return install
+
+
+# --------------------------------------------------------------------------- A. network guard
+
+
+def test_guard_refuses_a_real_httpx_call() -> None:
+    with pytest.raises(pytest.fail.Exception, match="real network"):
+        httpx.get("https://huggingface.co/")
+
+
+def test_guard_stops_the_real_listing_too() -> None:
+    with pytest.raises(pytest.fail.Exception, match="real network"):
+        fetch_model.list_files("org/repo", "a" * 40)
 
 
 # --------------------------------------------------------------------------- A. constants and import
@@ -161,6 +171,12 @@ def test_only_the_install_step_talks_to_the_hub() -> None:
         if re.search(r"huggingface_hub|snapshot_download|hf_hub_download|fetch_model", text):
             offenders.append(path.relative_to(ROOT).as_posix())
     assert offenders == []
+
+
+def test_install_step_no_longer_uses_the_restarting_hub_download() -> None:
+    source = read("app/scripts/fetch_model.py")
+    assert "snapshot_download" not in source
+    assert "hf_hub_download" not in source
 
 
 # --------------------------------------------------------------------------- A. is_complete
@@ -242,14 +258,12 @@ def test_is_complete_reports_an_unusable_index_instead_of_raising(tmp_path: Path
 # --------------------------------------------------------------------------- A. download
 
 
-def test_download_calls_the_hub_with_the_requested_snapshot(tmp_path: Path, hub, sleeps: list[float]) -> None:
-    fake = hub()
+def test_download_lists_and_fetches_the_requested_revision(tmp_path: Path, hub, sleeps: list[float]) -> None:
+    fake = hub(files={"config.json": b"{}"})
     fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    assert len(fake.calls) == 1
-    call = fake.calls[0]
-    assert call["repo_id"] == "org/repo"
-    assert call["revision"] == "a" * 40
-    assert Path(call["local_dir"]) == tmp_path
+    assert fake.list_calls == [("org/repo", "a" * 40)]
+    assert [str(r.url) for r in fake.requests] == [f"https://huggingface.co/org/repo/resolve/{'a' * 40}/config.json"]
+    assert (tmp_path / "config.json").read_bytes() == b"{}"
     assert sleeps == []
 
 
@@ -264,10 +278,8 @@ def test_download_calls_the_hub_with_the_requested_snapshot(tmp_path: Path, hub,
         "merges.txt",
     ],
 )
-def test_allow_patterns_fetch_what_a_complete_model_needs(tmp_path: Path, hub, filename: str) -> None:
-    fake = hub()
-    fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    patterns = fake.calls[0]["allow_patterns"]
+def test_allow_patterns_fetch_what_a_complete_model_needs(filename: str) -> None:
+    patterns = fetch_model.ALLOW_PATTERNS
     assert "*.safetensors" in patterns
     assert any(fnmatch.fnmatch(filename, pattern) for pattern in patterns)
 
@@ -275,7 +287,7 @@ def test_allow_patterns_fetch_what_a_complete_model_needs(tmp_path: Path, hub, f
 def test_download_retries_until_it_succeeds(tmp_path: Path, hub, sleeps: list[float]) -> None:
     fake = hub(errors=[OSError("reset"), TimeoutError("slow")])
     fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    assert len(fake.calls) == 3
+    assert len(fake.list_calls) == 3
     assert len(sleeps) == 2
 
 
@@ -283,7 +295,7 @@ def test_download_retries_until_it_succeeds(tmp_path: Path, hub, sleeps: list[fl
 def test_download_retries_on_any_exception_type(tmp_path: Path, hub, sleeps: list[float], error: Exception) -> None:
     fake = hub(errors=[error])
     fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    assert len(fake.calls) == 2
+    assert len(fake.list_calls) == 2
 
 
 def test_download_backs_off(tmp_path: Path, hub, sleeps: list[float]) -> None:
@@ -301,7 +313,7 @@ def test_download_reraises_the_last_error_after_five_attempts(tmp_path: Path, hu
     with pytest.raises(OSError) as caught:
         fetch_model.download(tmp_path, "org/repo", "a" * 40)
     assert caught.value is errors[-1]
-    assert len(fake.calls) == 5
+    assert len(fake.list_calls) == 5
     assert len(sleeps) == 4, "no pause after the last attempt"
 
 
@@ -309,7 +321,7 @@ def test_download_honours_a_custom_attempt_count(tmp_path: Path, hub, sleeps: li
     fake = hub(errors=[OSError(str(i)) for i in range(3)])
     with pytest.raises(OSError):
         fetch_model.download(tmp_path, "org/repo", "a" * 40, attempts=2)
-    assert len(fake.calls) == 2
+    assert len(fake.list_calls) == 2
     assert len(sleeps) == 1
 
 
@@ -317,7 +329,7 @@ def test_download_does_not_retry_a_keyboard_interrupt(tmp_path: Path, hub, sleep
     fake = hub(errors=[KeyboardInterrupt()])
     with pytest.raises(KeyboardInterrupt):
         fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    assert len(fake.calls) == 1
+    assert len(fake.list_calls) == 1
     assert sleeps == []
 
 
@@ -435,12 +447,12 @@ def test_main_honours_repo_and_revision_from_the_environment(
 
 
 def test_main_end_to_end_reaches_the_hub_with_the_pin(model_dir: Path, hub, sleeps: list[float]) -> None:
-    """Nothing of fetch_model is replaced: a retry, then a snapshot that really fills the directory."""
-    fake = hub(errors=[OSError("reset")], effect=write_model)
+    """Nothing of fetch_model but the listing is replaced: a retry, then requests that really fill the directory."""
+    fake = hub(errors=[OSError("reset")])
     assert fetch_model.main() == 0
-    assert len(fake.calls) == 2
-    assert all(call["revision"] == fetch_model.DEFAULT_REVISION for call in fake.calls)
-    assert all(call["repo_id"] == fetch_model.DEFAULT_REPO for call in fake.calls)
+    assert fake.list_calls == [(fetch_model.DEFAULT_REPO, fetch_model.DEFAULT_REVISION)] * 2
+    prefix = f"https://huggingface.co/{fetch_model.DEFAULT_REPO}/resolve/{fetch_model.DEFAULT_REVISION}/"
+    assert {str(r.url) for r in fake.requests} == {prefix + name for name in model_files()}
     assert fetch_model.is_complete(model_dir)[0] is True
 
 

@@ -1,8 +1,9 @@
 """Hardening found in review: title/evidence/age guards, install-time download, compose and start scripts, test page.
 
 Written from the review spec, not from the implementation. Nothing here loads the model, runs Docker or touches the
-network: `shutil.disk_usage`, `snapshot_download` and `time.sleep` are replaced, compose files are parsed as YAML, and
-the start scripts are read with comments removed, so a rule that exists only in a comment does not count. The one
+network: `shutil.disk_usage`, `fetch_model.list_files` and `time.sleep` are replaced, file requests go to an
+`httpx.MockTransport`, an autouse guard fails any test that reaches a real transport, compose files are parsed as YAML,
+and the start scripts are read with comments removed, so a rule that exists only in a comment does not count. The one
 behavioural script check runs a single extracted bash function with `docker` stubbed as a shell function.
 """
 
@@ -17,7 +18,7 @@ from collections import namedtuple
 from collections.abc import Callable
 from pathlib import Path
 
-import huggingface_hub
+import httpx
 import pytest
 import yaml
 from fastapi.testclient import TestClient
@@ -31,6 +32,7 @@ from app.services.intent_guards import (
     fix_age_direction,
     fix_generic_title,
 )
+from tests.unit.fetch_fakes import Hub, forbid_network, serve
 
 ROOT = Path(__file__).resolve().parents[2]
 TITLE_FIX = "academicTitle->isAcademicTitle"
@@ -43,6 +45,16 @@ def intent_of(**fields) -> ParsedSearchIntent:
 
 def read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    forbid_network(monkeypatch)
+
+
+def test_guard_refuses_a_real_httpx_call() -> None:
+    with pytest.raises(pytest.fail.Exception, match="real network"):
+        httpx.get("https://huggingface.co/")
 
 
 # --------------------------------------------------------------------------- 1. fix_generic_title
@@ -314,19 +326,9 @@ def downloads(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
     return calls
 
 
-def hub_raising(monkeypatch: pytest.MonkeyPatch, *errors: BaseException) -> list[dict]:
-    """Replace snapshot_download: raises the queued errors in order, then succeeds. Returns the recorded calls."""
-    calls: list[dict] = []
-    queue = list(errors)
-
-    def snapshot_download(**kwargs) -> str:
-        calls.append(kwargs)
-        if queue:
-            raise queue.pop(0)
-        return str(kwargs["local_dir"])
-
-    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
-    return calls
+def hub_raising(monkeypatch: pytest.MonkeyPatch, *errors: BaseException) -> Hub:
+    """A hub with a one-file repo whose listing raises the queued errors in order, then succeeds."""
+    return serve(monkeypatch, Hub({"config.json": b"{}"}, list_errors=errors))
 
 
 def enospc() -> OSError:
@@ -351,7 +353,16 @@ def test_disk_space_subtracts_safetensors_already_present(tmp_path: Path, disk) 
     assert fetch_model.has_disk_space(tmp_path) is True
 
 
-def test_disk_space_counts_only_safetensors(tmp_path: Path, disk) -> None:
+def test_disk_space_counts_a_part_file_as_already_downloaded(tmp_path: Path, disk) -> None:
+    (tmp_path / "model-00001-of-00002.safetensors").write_bytes(b"\0" * 1000)
+    (tmp_path / "model-00002-of-00002.safetensors.part").write_bytes(b"\0" * 500)
+    disk(fetch_model.MODEL_BYTES - 1500 - 1)
+    assert fetch_model.has_disk_space(tmp_path) is False
+    disk(fetch_model.MODEL_BYTES - 1500)
+    assert fetch_model.has_disk_space(tmp_path) is True
+
+
+def test_disk_space_counts_only_weights_and_part_files(tmp_path: Path, disk) -> None:
     (tmp_path / "config.json").write_bytes(b"\0" * 1000)
     (tmp_path / "notes.safetensors.txt").write_bytes(b"\0" * 1000)
     disk(fetch_model.MODEL_BYTES - 1)
@@ -387,22 +398,35 @@ def test_main_downloads_the_remainder_when_it_fits(
     assert len(downloads) == 1
 
 
+def test_main_counts_an_interrupted_part_file_when_checking_the_disk(
+    model_dir: Path, disk, downloads: list[tuple], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(fetch_model, "MODEL_BYTES", 100)
+    (model_dir / "model-00001-of-00002.safetensors.part").write_bytes(b"\0" * 60)
+    disk(39)
+    assert fetch_model.main() == 1
+    assert downloads == []
+    disk(40)
+    fetch_model.main()
+    assert len(downloads) == 1
+
+
 def test_download_stops_on_a_full_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]) -> None:
     error = enospc()
-    calls = hub_raising(monkeypatch, error)
+    fake = hub_raising(monkeypatch, error)
     with pytest.raises(OSError) as caught:
         fetch_model.download(tmp_path, "org/repo", "a" * 40)
     assert caught.value is error
-    assert len(calls) == 1
+    assert len(fake.list_calls) == 1
     assert sleeps == []
 
 
 def test_download_still_retries_other_os_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
 ) -> None:
-    calls = hub_raising(monkeypatch, OSError(errno.ECONNRESET, "Connection reset"))
+    fake = hub_raising(monkeypatch, OSError(errno.ECONNRESET, "Connection reset"))
     fetch_model.download(tmp_path, "org/repo", "a" * 40)
-    assert len(calls) == 2
+    assert len(fake.list_calls) == 2
 
 
 @pytest.mark.parametrize(
@@ -428,9 +452,9 @@ def test_main_returns_1_after_every_real_attempt_fails(
     model_dir: Path, disk, monkeypatch: pytest.MonkeyPatch, sleeps: list[float], capsys: pytest.CaptureFixture[str]
 ) -> None:
     disk(fetch_model.MODEL_BYTES)
-    calls = hub_raising(monkeypatch, *[OSError(f"failure {i}") for i in range(fetch_model.MAX_ATTEMPTS)])
+    fake = hub_raising(monkeypatch, *[OSError(f"failure {i}") for i in range(fetch_model.MAX_ATTEMPTS)])
     assert fetch_model.main() == 1
-    assert len(calls) == fetch_model.MAX_ATTEMPTS
+    assert len(fake.list_calls) == fetch_model.MAX_ATTEMPTS
     assert "resume" in capsys.readouterr().err.lower()
 
 
@@ -438,9 +462,9 @@ def test_main_stops_at_the_first_attempt_on_a_full_disk(
     model_dir: Path, disk, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
 ) -> None:
     disk(fetch_model.MODEL_BYTES)
-    calls = hub_raising(monkeypatch, enospc())
+    fake = hub_raising(monkeypatch, enospc())
     assert fetch_model.main() == 1
-    assert len(calls) == 1
+    assert len(fake.list_calls) == 1
     assert sleeps == []
 
 

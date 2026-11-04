@@ -118,3 +118,7 @@ reason:"NOT_READY_TO_SEARCH"`; else POST `searchModel` to the HR API and return 
     with spaces also lengthened the output. v11 lists keys without a JSON schema, keeps 8 few-shots and writes JSON
     without spaces. Latency fell from about 6-8 s (v10) to 3.3 s p50 on the same server, with main set 30/30 and core 10/10. The
     cost is the challenge set: 31/35 -> 27/35. Guards took over the rules that wording could not hold reliably.
+12. **Own resumable download instead of `snapshot_download`.** `huggingface_hub` 1.33 writes each attempt to a new
+    random temporary file, so an interruption restarts that file from zero; on the dev line (about 1 MB/s) with a laptop
+    that sleeps, the model never finished, and each attempt left gigabytes of orphaned partial files. `fetch_model.py`
+    now appends to `<file>.part` with HTTP Range requests and verifies the Hub's SHA-256 before moving a file in place.

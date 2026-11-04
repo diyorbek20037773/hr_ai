@@ -11,12 +11,16 @@ written to: if it is incomplete the step fails and reports the missing files.
 from __future__ import annotations
 
 import errno
+import hashlib
 import json
 import os
 import shutil
 import sys
 import time
+from fnmatch import fnmatch
 from pathlib import Path
+
+import httpx
 
 from app.services.llm_service import ModelNotFoundError, verify_model_files
 
@@ -27,6 +31,9 @@ INDEX_FILE = "model.safetensors.index.json"
 ALLOW_PATTERNS = ["*.safetensors", "*.json", "*.txt", "LICENSE", "README.md"]
 MAX_ATTEMPTS = 5
 MODEL_BYTES = 8_100_000_000
+CHUNK_BYTES = 1024 * 1024
+READ_TIMEOUT_SECONDS = 60
+REPORT_SECONDS = 30
 
 
 def is_complete(path: Path) -> tuple[bool, str]:
@@ -49,27 +56,99 @@ def is_complete(path: Path) -> tuple[bool, str]:
     return True, "complete"
 
 
-def download(path: Path, repo: str, revision: str, attempts: int = MAX_ATTEMPTS) -> None:
-    """Resumable: partial files stay on the volume, so a retry or a re-run continues where it stopped."""
-    from huggingface_hub import snapshot_download
+def list_files(repo: str, revision: str) -> list[tuple[str, int, str | None]]:
+    """(name, size, sha256 or None) of the wanted files. LFS files (the weights) carry a sha256."""
+    from huggingface_hub import HfApi
 
-    for attempt in range(1, attempts + 1):
+    info = HfApi().model_info(repo, revision=revision, files_metadata=True)
+    return [(s.rfilename, s.size, s.lfs.sha256 if s.lfs else None) for s in info.siblings
+            if any(fnmatch(s.rfilename, pattern) for pattern in ALLOW_PATTERNS)]
+
+
+def sha256_of(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(CHUNK_BYTES):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def fetch_file(client: httpx.Client, url: str, dest: Path, size: int, sha256: str | None) -> None:
+    """Append to <dest>.part from the byte it stopped at, then verify and move it into place.
+
+    huggingface_hub restarts a file from zero after every interruption, which on a slow line or a laptop that sleeps
+    means the 8 GB model may never finish. Plain HTTP Range requests survive both.
+    """
+    if dest.is_file() and dest.stat().st_size == size:
+        return
+    part = dest.with_name(dest.name + ".part")
+    part.touch()
+    done = part.stat().st_size
+    if done > size:
+        part.write_bytes(b"")
+        done = 0
+    if done < size:
+        # identity: byte offsets must be file offsets, so no transfer compression on resume.
+        range_headers = {"Range": f"bytes={done}-", "Accept-Encoding": "identity"}
+        with client.stream("GET", url, headers=range_headers) as response:
+            response.raise_for_status()
+            mode = "ab" if response.status_code == 206 else "wb"  # 200: the server ignored the range
+            done = done if mode == "ab" else 0
+            last_report = time.monotonic()
+            with part.open(mode) as f:
+                # iter_raw() without a size: a sized iterator holds back what arrived before a dropped connection.
+                for chunk in response.iter_raw():
+                    f.write(chunk)
+                    done += len(chunk)
+                    if time.monotonic() - last_report >= REPORT_SECONDS:
+                        last_report = time.monotonic()
+                        print(f"  {dest.name}: {done / 1e9:.2f} / {size / 1e9:.2f} GB", flush=True)
+    if part.stat().st_size != size:
+        raise OSError(f"{dest.name}: got {part.stat().st_size} bytes, expected {size}")
+    if sha256 and sha256_of(part) != sha256:
+        part.unlink()
+        raise OSError(f"{dest.name}: checksum mismatch, the file will be downloaded again")
+    part.replace(dest)
+
+
+def bytes_on_disk(path: Path) -> int:
+    return sum(f.stat().st_size for pattern in ("*.safetensors", "*.part") for f in path.glob(pattern))
+
+
+def progress_marker(path: Path) -> int:
+    return sum(f.stat().st_size for f in path.iterdir() if f.is_file())
+
+
+def download(path: Path, repo: str, revision: str, attempts: int = MAX_ATTEMPTS) -> None:
+    """Resumable. `attempts` counts consecutive failures without progress, so a flaky line keeps moving forward."""
+    endpoint = (os.environ.get("HF_ENDPOINT") or "https://huggingface.co").rstrip("/")
+    token = os.environ.get("HF_TOKEN")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    failures = 0
+    while True:
+        before = progress_marker(path)
         try:
-            snapshot_download(repo_id=repo, revision=revision, local_dir=path, allow_patterns=ALLOW_PATTERNS)
+            timeout = httpx.Timeout(30, read=READ_TIMEOUT_SECONDS)
+            with httpx.Client(headers=headers, timeout=timeout, follow_redirects=True) as client:
+                for name, size, sha256 in list_files(repo, revision):
+                    dest = path / name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    fetch_file(client, f"{endpoint}/{repo}/resolve/{revision}/{name}", dest, size, sha256)
             return
         except Exception as exc:  # noqa: BLE001 — network errors have many types; the last one is re-raised
-            if attempt == attempts or (isinstance(exc, OSError) and exc.errno == errno.ENOSPC):
+            if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
                 raise
-            delay = min(60, 5 * 2 ** (attempt - 1))
-            print(f"Download attempt {attempt}/{attempts} failed ({type(exc).__name__}: {exc}); retry in {delay}s",
+            failures = 1 if progress_marker(path) > before else failures + 1
+            if failures >= attempts:
+                raise
+            delay = min(60, 5 * 2 ** (failures - 1))
+            print(f"Download interrupted ({type(exc).__name__}: {exc}); retry {failures}/{attempts} in {delay}s",
                   flush=True)
             time.sleep(delay)
 
 
 def has_disk_space(path: Path) -> bool:
-    present = sum(f.stat().st_size for f in path.glob("*.safetensors"))
-    free = shutil.disk_usage(path).free
-    return free >= MODEL_BYTES - present
+    return shutil.disk_usage(path).free >= MODEL_BYTES - bytes_on_disk(path)
 
 
 def main() -> int:
