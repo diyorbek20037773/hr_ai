@@ -148,7 +148,21 @@ access logs are disabled (the middleware logs method/route/status/duration only)
 
 ## Last verified run
 
-_Filled in below._
+2026-11-05, Docker stack, prompt v11, dev laptop RTX 3050 6 GB. Run from a fresh `git clone` without `model/`.
+
+- `start.ps1` detected the GPU and chose torch 2.11.0+cu128. Inside the container `torch.cuda.is_available()` is true;
+  `/health` reports `device=cuda`, `dtype=bfloat16+4bit`, `modelPath=/models`, `promptVersion=11`.
+- Model download: the volume was seeded with each weight file 20 MB short, as `.part`. `model-init` fetched the missing
+  bytes from the real Hugging Face Hub, was interrupted by a network loss, resumed, and verified every SHA-256. A full
+  download from zero was not completed here (the line gives about 1 MB/s and the laptop slept); resume across a killed
+  container was verified from zero bytes as well.
+- `api`: healthy, model mount read-only, `HF_HUB_OFFLINE=1`. Grafana: health ok, 11 panels, Prometheus has the
+  `hr_ai_model_loaded` series.
+- Real Chrome: type a query, press Qidirish, the filters and `searchModel` appear in 2.5-4 s, also with the prompt panel
+  open. Smoke: **12/12**.
+- CPU image: same query answered correctly in 6.6 minutes (7.6 GB Docker RAM, bind-mounted model).
+- Not run on real hardware: Linux with an NVIDIA GPU, AMD/ROCm, macOS, cu126, cu118. `start.sh` was run for detection and
+  simulated GPU tables under WSL Ubuntu, not end to end.
 
 ## Last load test
 

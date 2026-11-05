@@ -58,6 +58,8 @@ def is_complete(path: Path) -> tuple[bool, str]:
 
 def list_files(repo: str, revision: str) -> list[tuple[str, int, str | None]]:
     """(name, size, sha256 or None) of the wanted files. LFS files (the weights) carry a sha256."""
+    if not os.environ.get("HF_ENDPOINT"):
+        os.environ.pop("HF_ENDPOINT", None)  # huggingface_hub treats an empty value as the endpoint
     from huggingface_hub import HfApi
 
     info = HfApi().model_info(repo, revision=revision, files_metadata=True)

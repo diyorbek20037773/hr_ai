@@ -20,6 +20,7 @@ import time
 from collections import namedtuple
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -307,14 +308,23 @@ def test_download_backs_off(tmp_path: Path, hub, sleeps: list[float]) -> None:
     assert sleeps[-1] > sleeps[0]
 
 
-def test_download_reraises_the_last_error_after_five_attempts(tmp_path: Path, hub, sleeps: list[float]) -> None:
-    errors = [OSError(f"failure {i}") for i in range(5)]
+def test_download_reraises_the_last_error_after_max_attempts(tmp_path: Path, hub, sleeps: list[float]) -> None:
+    errors = [OSError(f"failure {i}") for i in range(fetch_model.MAX_ATTEMPTS)]
     fake = hub(errors=list(errors))
     with pytest.raises(OSError) as caught:
         fetch_model.download(tmp_path, "org/repo", "a" * 40)
     assert caught.value is errors[-1]
-    assert len(fake.list_calls) == 5
-    assert len(sleeps) == 4, "no pause after the last attempt"
+    assert len(fake.list_calls) == fetch_model.MAX_ATTEMPTS
+    assert len(sleeps) == fetch_model.MAX_ATTEMPTS - 1, "no pause after the last attempt"
+
+
+def test_download_gives_up_after_about_six_minutes_without_progress(tmp_path: Path, hub, sleeps: list[float]) -> None:
+    """The tests around it follow MAX_ATTEMPTS, so this one pins the promise itself: a long outage is survived."""
+    assert fetch_model.MAX_ATTEMPTS == 10
+    hub(errors=[OSError(str(i)) for i in range(fetch_model.MAX_ATTEMPTS)])
+    with pytest.raises(OSError):
+        fetch_model.download(tmp_path, "org/repo", "a" * 40)
+    assert 5 * 60 <= sum(sleeps) <= 7 * 60
 
 
 def test_download_honours_a_custom_attempt_count(tmp_path: Path, hub, sleeps: list[float]) -> None:
@@ -460,12 +470,13 @@ def test_main_never_reports_success_when_every_download_attempt_fails(
     model_dir: Path, hub, sleeps: list[float]
 ) -> None:
     """Raising and returning non-zero both fail the container, which is what keeps `api` from starting."""
-    hub(errors=[OSError(str(i)) for i in range(5)])
+    fake = hub(errors=[OSError(str(i)) for i in range(fetch_model.MAX_ATTEMPTS)])
     try:
         code = fetch_model.main()
     except OSError:
-        return
+        code = None
     assert code != 0
+    assert len(fake.list_calls) == fetch_model.MAX_ATTEMPTS
 
 
 # --------------------------------------------------------------------------- B. docker-compose.yml
@@ -541,6 +552,90 @@ def test_accelerator_overlays_do_not_widen_the_stack(overlay: str) -> None:
     overlay_services = load_yaml(f"docker/{overlay}").get("services") or {}
     for service in overlay_services.values():
         assert not {"ports", "volumes", "environment", "network_mode", "command", "env_file"} & set(service)
+
+
+def hf_endpoint_values(node: object) -> Iterator[str]:
+    """What a parsed compose file gives HF_ENDPOINT: mapping and list form, anchors, and ${...} inside other values."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "HF_ENDPOINT":
+                yield "" if value is None else str(value)
+            else:
+                yield from hf_endpoint_values(value)
+    elif isinstance(node, list):
+        for item in node:
+            name, _, value = str(item).partition("=")
+            if name == "HF_ENDPOINT":
+                yield value
+            else:
+                yield from hf_endpoint_values(item)
+    elif isinstance(node, str):
+        yield from re.findall(r"\$\{HF_ENDPOINT\b.*?\}+", node)
+
+
+def hf_endpoint_is_usable(value: str) -> bool:
+    """An https URL even when the host variable is unset or empty. Only ":-" covers both; "-" keeps an empty value."""
+    match = re.fullmatch(r"\$\{HF_ENDPOINT:-([^${}]*)\}", value)
+    parts = urlsplit(match[1] if match else value)
+    return parts.scheme == "https" and bool(parts.hostname)
+
+
+@pytest.mark.parametrize(
+    "compose_file",
+    [
+        "docker-compose.yml",
+        *sorted(f"docker/{p.name}" for p in (ROOT / "docker").glob("compose.*.yml")),
+        *sorted(f"ops/{p.name}" for p in (ROOT / "ops").glob("docker-compose*.yml")),
+    ],
+)
+def test_every_hf_endpoint_default_in_compose_is_an_https_url(compose_file: str) -> None:
+    """An empty HF_ENDPOINT makes huggingface_hub fail with UnsupportedProtocol, inside the container, on a real run."""
+    assert [v for v in hf_endpoint_values(load_yaml(compose_file)) if not hf_endpoint_is_usable(v)] == []
+
+
+def test_model_init_has_a_usable_hf_endpoint(services: dict) -> None:
+    """Keeps the check above from passing on nothing: the variable has to be there, with the default the spec names."""
+    assert services["model-init"]["environment"]["HF_ENDPOINT"] == "${HF_ENDPOINT:-https://huggingface.co}"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "${HF_ENDPOINT}",
+        "${HF_ENDPOINT:-}",
+        "${HF_ENDPOINT-}",
+        "${HF_ENDPOINT-https://huggingface.co}",
+        "${HF_ENDPOINT:-${MIRROR}}",
+        "${HF_ENDPOINT:-http://huggingface.co}",
+        "${HF_ENDPOINT:-huggingface.co}",
+        "${HF_ENDPOINT:-https://}",
+    ],
+)
+def test_the_hf_endpoint_rule_rejects_what_can_end_up_empty_or_insecure(value: str) -> None:
+    assert not hf_endpoint_is_usable(value)
+
+
+@pytest.mark.parametrize("value", ["${HF_ENDPOINT:-https://huggingface.co}", "https://mirror.test"])
+def test_the_hf_endpoint_rule_accepts_an_https_url(value: str) -> None:
+    assert hf_endpoint_is_usable(value)
+
+
+@pytest.mark.parametrize(
+    ("compose", "expected"),
+    [
+        ("x-app: {environment: {HF_ENDPOINT: 'https://a.test'}}", ["https://a.test"]),
+        ("services: {s: {environment: {HF_ENDPOINT: }}}", [""]),
+        ("services: {s: {environment: ['HF_ENDPOINT=https://a.test']}}", ["https://a.test"]),
+        ("services: {s: {environment: ['HF_ENDPOINT=']}}", [""]),
+        ("services: {s: {environment: ['HF_ENDPOINT']}}", [""]),
+        ("services: {s: {build: {args: {URL: '${HF_ENDPOINT}'}}}}", ["${HF_ENDPOINT}"]),
+        ("services: {s: {environment: {OTHER: '${HF_ENDPOINT_X:-a}', NEAR: 1}}}", []),
+        ("# HF_ENDPOINT: ${HF_ENDPOINT:-}\nservices: {}", []),
+    ],
+)
+def test_the_hf_endpoint_rule_finds_the_variable_in_every_compose_form(compose: str, expected: list[str]) -> None:
+    assert list(hf_endpoint_values(yaml.safe_load(compose))) == expected
 
 
 # --------------------------------------------------------------------------- B. Dockerfile
